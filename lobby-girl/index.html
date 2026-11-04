@@ -23,20 +23,22 @@ button{font:inherit;font-size:13px;color:var(--fg);background:transparent;border
 button.primary{background:var(--cyan);border-color:var(--cyan);color:#082429;font-weight:700}
 button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#2a0f04}
 /* minimal layer: always present */
-.pill{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:7px;font-size:12px;background:rgba(10,8,14,.45);border:1px solid var(--line);border-radius:999px;padding:5px 12px;z-index:5;transition:opacity .4s}
+.pill{position:fixed;left:max(12px,env(safe-area-inset-left));top:calc(10px + env(safe-area-inset-top));display:flex;align-items:center;gap:8px;font-size:12px;background:rgba(10,8,14,.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:999px;padding:4px 14px 4px 4px;z-index:5;transition:opacity .4s}
+.pill .pwr{width:38px;height:38px}
+.ptxt{display:flex;align-items:center;gap:7px}
 .pill i,.mode i{width:7px;height:7px;border-radius:50%;background:var(--mute);flex:none}
 body:not(.awake) .pill i,body:not(.awake) .mode i{animation:breathe 3.2s ease-in-out infinite}
 body.awake .pill i,body.awake .mode i{background:#6be38a}
 body.booting .pill i,body.booting .mode i{background:#ffd166;animation:breathe .6s ease-in-out infinite}
 @keyframes breathe{0%,100%{opacity:.25}50%{opacity:1}}
 body:not(.minimal) .pill{opacity:0;pointer-events:none}
-.toast{position:fixed;left:max(14px,env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:999px;font-size:11px;z-index:6;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast{position:fixed;left:max(14px,env(safe-area-inset-left));top:calc(var(--uih,56px) + 16px + env(safe-area-inset-top));background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:999px;font-size:11px;z-index:6;opacity:0;transition:opacity .25s;pointer-events:none}
 .toast.on{opacity:1}
-.sub{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--uih,60px) + 14px + env(safe-area-inset-bottom));max-width:min(86vw,520px);background:rgba(10,8,14,.66);color:#fff;font-size:14px;line-height:1.5;padding:7px 14px;border-radius:10px;opacity:0;transition:opacity .3s,bottom .3s;pointer-events:none;z-index:6;text-align:center}
+.sub{position:fixed;left:50%;transform:translateX(-50%);top:calc(var(--uih,56px) + 48px + env(safe-area-inset-top));max-width:min(86vw,520px);background:rgba(10,8,14,.66);color:#fff;font-size:14px;line-height:1.5;padding:7px 14px;border-radius:10px;opacity:0;transition:opacity .3s,top .3s;pointer-events:none;z-index:6;text-align:center}
 .sub.on{opacity:1}
 /* interaction dock */
-.ui{position:fixed;left:0;right:0;bottom:0;padding:10px max(12px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:8px;z-index:5;transition:opacity .4s,transform .4s;box-sizing:border-box}
-body.minimal .ui{opacity:0;transform:translateY(16px);pointer-events:none}
+.ui{position:fixed;left:0;right:0;top:0;padding:calc(10px + env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) 10px max(12px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:8px;z-index:5;transition:opacity .4s,transform .4s;box-sizing:border-box}
+body.minimal .ui{opacity:0;transform:translateY(-16px);pointer-events:none}
 .dock{background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:14px;padding:8px;display:flex;gap:8px;align-items:center;min-width:0}
 .pwr{width:40px;height:40px;border-radius:50%;padding:0;font-size:17px;flex:none}
 body.awake .pwr{background:var(--cyan);border-color:var(--cyan);color:#082429}
@@ -52,7 +54,7 @@ body.talk .chat{display:flex}
 .chat form{display:flex;gap:6px}
 .chat input{flex:1;min-width:0;font:inherit;font-size:16px;color:var(--fg);background:rgba(255,255,255,.07);border:1px solid var(--line);border-radius:999px;padding:7px 12px}
 /* settings sheet */
-.sheet{position:fixed;left:0;right:0;bottom:0;z-index:8;background:rgba(20,17,26,.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line);border-radius:18px 18px 0 0;padding:14px max(16px,env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));transform:translateY(105%);transition:transform .35s ease;max-height:75vh;overflow:auto;box-sizing:border-box;touch-action:pan-y}
+.sheet{position:fixed;left:0;right:0;top:0;z-index:8;background:rgba(20,17,26,.95);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line);border-radius:0 0 18px 18px;padding:calc(14px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 16px max(16px,env(safe-area-inset-left));transform:translateY(-105%);transition:transform .35s ease;max-height:70vh;overflow:auto;box-sizing:border-box;touch-action:pan-y}
 body.settings .sheet{transform:none}
 .sheet h2{font-size:15px;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center}
 .sheet h3{font-size:11px;letter-spacing:.08em;color:var(--mute);margin:14px 0 8px;font-weight:600}
@@ -78,18 +80,18 @@ body.settings .sheet{transform:none}
 </div>
 <div class="toast" id="toast"></div>
 <div class="sub" id="sub"></div>
-<button class="pill" id="pill"><i></i><span id="modeTxt2">休眠待機 · 點一下喚出介面</span></button>
+<div class="pill" id="pill"><button class="pwr" id="pwr2" aria-label="開機或休眠">⏻</button><span class="ptxt" id="pillTxt"><i></i><span id="modeTxt2">休眠待機</span></span></div>
 <div class="ui" id="ui">
-  <div class="dock chat" id="chat">
-    <div class="chips"><button data-q="妳在做什麼？">妳在做什麼？</button><button data-q="想聽歌">想聽歌</button><button data-q="妳是誰？">妳是誰？</button><button data-q="晚安">晚安</button></div>
-    <form id="chatForm"><input id="chatIn" placeholder="跟她說話…" autocomplete="off" enterkeyhint="send"><button class="primary" type="submit">送出</button></form>
-  </div>
   <div class="dock" id="dock">
     <button class="pwr" id="pwr" aria-label="開機或休眠">⏻</button>
     <div class="mode"><i></i><span id="modeTxt">休眠待機</span></div>
     <label class="vol" aria-label="音量">🔈<input id="vol" type="range" min="0" max="1" step="0.01" value="0.6"></label>
     <button class="icon" id="sense" aria-pressed="false" aria-label="鏡頭感應">◉</button>
     <button class="icon" id="setBtn" aria-label="設定">⚙</button>
+  </div>
+  <div class="dock chat" id="chat">
+    <div class="chips"><button data-q="妳在做什麼？">妳在做什麼？</button><button data-q="想聽歌">想聽歌</button><button data-q="妳是誰？">妳是誰？</button><button data-q="晚安">晚安</button></div>
+    <form id="chatForm"><input id="chatIn" placeholder="跟她說話…" autocomplete="off" enterkeyhint="send"><button class="primary" type="submit">送出</button></form>
   </div>
 </div>
 <div class="sheet" id="sheet" role="dialog" aria-label="設定">
@@ -155,7 +157,7 @@ function init() {
 
   renderer = new spine.SceneRenderer(canvas, ctx, true);
   shapes = renderer.shapes;
-  resize(); addEventListener("resize", () => { resize(); clampCam(camT); }); clampCam(camT); Object.assign(cam, camT);
+  resize(); addEventListener("resize", () => { resize(); clampCam(camT); }); Object.assign(camT, SHOT.sleep); clampCam(camT); Object.assign(cam, camT);
   requestAnimationFrame(loop);
 }
 
@@ -186,7 +188,7 @@ $("dbg").onclick = () => { showParts = !showParts; $("dbg").setAttribute("aria-p
 let idleT;
 LG.minimalLock = false; // interact.js sets this in listen mode
 function setMinimal(on) { document.body.classList.toggle("minimal", on); updateSubPos(); }
-function updateSubPos() { document.body.style.setProperty("--uih", (document.body.classList.contains("minimal") ? 40 : $("ui").offsetHeight - 10) + "px"); }
+function updateSubPos() { document.body.style.setProperty("--uih", (document.body.classList.contains("minimal") ? 46 : $("ui").offsetHeight - 10) + "px"); }
 LG.poke = () => {
   if (LG.minimalLock) return;
   setMinimal(false); clearTimeout(idleT);
@@ -194,7 +196,7 @@ LG.poke = () => {
 };
 LG.setMinimal = setMinimal;
 document.addEventListener("pointerdown", e => { if (!e.target.closest("canvas")) LG.poke(); }, true);
-$("pill").onclick = () => LG.poke();
+$("pillTxt").onclick = () => LG.poke();
 $("setBtn").onclick = () => { document.body.classList.add("settings"); clearTimeout(idleT); };
 $("setClose").onclick = () => { document.body.classList.remove("settings"); LG.poke(); };
 $("autoMin").onclick = () => { const on = $("autoMin").getAttribute("aria-pressed") !== "true"; $("autoMin").setAttribute("aria-pressed", on); LG.poke(); };
@@ -235,6 +237,8 @@ function screenToWorld(px, py, c = cam) {
   return { x: c.cx + (px - innerWidth / 2) * DPR / s, y: c.cy - (py - innerHeight / 2) * DPR / s };
 }
 $("camReset").onclick = resetCam;
+const SHOT = { sleep: { z: 1.6, cx: -60, cy: 930 }, wake: { z: 2.0, cx: -170, cy: 1060 } };
+LG.shot = name => { Object.assign(camT, SHOT[name]); clampCam(camT); };
 
 // ---- hit test ----
 const verts = new Float32Array(20000);

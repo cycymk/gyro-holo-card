@@ -29,14 +29,14 @@ const pick = a => a[Math.random() * a.length | 0];
 // ---------------- UI wiring (markup lives in index.html) ----------------
 const $ = id => document.getElementById(id);
 function wireUI() {
-  $("pwr").onclick = () => setPower(!awake);
+  $("pwr").onclick = $("pwr2").onclick = () => setPower(!awake);
   $("vol").oninput = e => setVolume(+e.target.value);
   $("sense").onclick = toggleSense;
   document.querySelectorAll("#chat [data-q]").forEach(b => b.onclick = () => ask(b.dataset.q));
   $("chatForm").onsubmit = e => { e.preventDefault(); const v = $("chatIn").value.trim(); if (v) ask(v); $("chatIn").value = ""; };
   $("voiceTgl").onclick = () => { voiceOn = !voiceOn; $("voiceTgl").setAttribute("aria-pressed", voiceOn); };
 }
-function setMode(t) { $("modeTxt").textContent = t; $("modeTxt2").textContent = awake ? t : "休眠待機 · 點一下喚出介面"; }
+function setMode(t) { $("modeTxt").textContent = t; $("modeTxt2").textContent = t; }
 
 // ---------------- speech + subtitles ----------------
 let subT, voice = null;
@@ -149,7 +149,7 @@ function setPower(on) {
     try { vEl.muted = true; vEl.src = Object.values(VOICE)[0] || ""; vEl.play().then(() => { vEl.pause(); vEl.muted = false; }).catch(() => { vEl.muted = false; }); } catch (e) {} // unlock iOS audio
     if ("speechSynthesis" in window) { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); }
     setTimeout(() => {
-      document.body.classList.remove("booting"); document.body.classList.add("awake"); restTarget = 0;
+      document.body.classList.remove("booting"); document.body.classList.add("awake"); restTarget = 0; LG.shot && LG.shot("wake");
       playing = true; ramp(bgmBus.gain, 0, 0.01); applyBgm(4.5); ramp(ambBus.gain, 0, 2.5);
       setMode(modeLabel()); setTimeout(() => say(pick(LINES.boot), { force: true }), 1600);
       scheduleIdleTalk();
@@ -157,7 +157,7 @@ function setPower(on) {
   } else {
     say(pick(LINES.sleep), { force: true });
     playing = false; applyBgm(2.2); ramp(ambBus.gain, 0.4, 3);
-    document.body.classList.remove("awake", "talk"); restTarget = 1; setMode("休眠待機"); clearTimeout(idleTalkT);
+    document.body.classList.remove("awake", "talk"); restTarget = 1; LG.shot && LG.shot("sleep"); setMode("休眠待機"); clearTimeout(idleTalkT);
   }
 }
 function scheduleIdleTalk() { clearTimeout(idleTalkT); idleTalkT = setTimeout(() => { if (awake && mode !== "listen") say(pick(LINES.idle)); scheduleIdleTalk(); }, 35000 + Math.random() * 25000); }
