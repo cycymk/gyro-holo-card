@@ -25,6 +25,12 @@ label input{flex:1;accent-color:var(--accent)}
 .top{position:fixed;top:calc(10px + env(safe-area-inset-top));left:14px;right:14px;display:flex;justify-content:space-between;font-size:12px;color:var(--mute);pointer-events:none}
 .toast{position:fixed;left:50%;top:18%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);padding:6px 14px;border-radius:999px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none}
 .toast.on{opacity:1}
+.ripple{position:fixed;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;border:2px solid var(--cyan);pointer-events:none;animation:rip .6s ease-out forwards;z-index:4}
+.ripple.hit{border-color:var(--accent);box-shadow:0 0 18px var(--accent)}
+.spark{position:fixed;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:var(--accent);pointer-events:none;z-index:4;animation:spark .55s ease-out forwards}
+@keyframes rip{from{transform:scale(1);opacity:.9}to{transform:scale(6);opacity:0}}
+@keyframes spark{from{transform:translate(0,0);opacity:1}to{transform:translate(var(--dx),var(--dy));opacity:0}}
+@media (prefers-reduced-motion:reduce){.ripple,.spark{animation-duration:.01s}}
 </style>
 </head>
 <body>
@@ -44,7 +50,8 @@ label input{flex:1;accent-color:var(--accent)}
   </div>
   <div class="bar">
     <label>視角 <input id="depth" type="range" min="0" max="2" step="0.05" value="1"></label>
-    <label>擺動 <input id="phys" type="range" min="0" max="2" step="0.05" value="0.5"></label>
+    <label>臉部 <input id="face" type="range" min="0" max="2" step="0.05" value="0.6"></label>
+    <label>擺動 <input id="phys" type="range" min="0" max="2" step="0.05" value="0.6"></label>
   </div>
 </div>
 <script src="spine-webgl.min.js"></script>
@@ -167,12 +174,25 @@ canvas.addEventListener("pointermove", e => {
   const dx = (e.clientX - last.x) / innerWidth, dy = (e.clientY - last.y) / innerHeight; last = { x: e.clientX, y: e.clientY };
   drag.x = Math.max(-1.6, Math.min(1.6, drag.x + dx * 3)); drag.y = Math.max(-1.6, Math.min(1.6, drag.y + dy * 3));
 });
+function feedback(x, y, hit) {
+  const r = document.createElement("div"); r.className = "ripple" + (hit ? " hit" : ""); r.style.left = x + "px"; r.style.top = y + "px";
+  document.body.appendChild(r); setTimeout(() => r.remove(), 650);
+  if (hit) {
+    for (let i = 0; i < 8; i++) { const sp = document.createElement("div"), a = i / 8 * Math.PI * 2 + Math.random() * 0.4, d = 30 + Math.random() * 26;
+      sp.className = "spark"; sp.style.left = x + "px"; sp.style.top = y + "px"; sp.style.setProperty("--dx", Math.cos(a) * d + "px"); sp.style.setProperty("--dy", Math.sin(a) * d + "px");
+      document.body.appendChild(sp); setTimeout(() => sp.remove(), 600); }
+    bounce = 0.975;
+    try { navigator.vibrate && navigator.vibrate(12); } catch (e) {}
+  }
+}
 canvas.addEventListener("pointerup", e => {
   if (!down) return;
   const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y), dt = performance.now() - down.t;
   if (moved < 10 && dt < 400) {
     const w = screenToWorld(e.clientX, e.clientY), slot = hitSlot(w.x, w.y);
-    if (slot) onPart(groupOf(slot.data.name), w.x, w.y);
+    const g = slot ? groupOf(slot.data.name) : null;
+    feedback(e.clientX, e.clientY, !!(g && g.key !== "other"));
+    if (g) onPart(g, w.x, w.y);
   }
   down = null;
 });
@@ -212,7 +232,7 @@ document.addEventListener("fullscreenchange", () => { if (!document.fullscreenEl
 $("recal").onclick = () => { gyroBase = gyroRaw ? { ...gyroRaw } : null; drag.x = drag.y = 0; };
 
 // ---- loop ----
-let lastT = performance.now(), prevTilt = { x: 0, y: 0 };
+let lastT = performance.now(), prevTilt = { x: 0, y: 0 }, bounce = 1;
 function loop(now) {
   const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
   if (!down) { drag.x *= 0.92; drag.y *= 0.92; }
@@ -220,7 +240,7 @@ function loop(now) {
   tilt.x += (tx - tilt.x) * 0.16; tilt.y += (ty - tilt.y) * 0.16;
 
   // eyes follow the viewer slightly: scrub the look animation by tilt
-  if (lookEntry) lookEntry.trackTime = Math.max(0, Math.min(1, 0.5 + tilt.x * 0.15)) * lookEntry.animationEnd * 0.999;
+  if (lookEntry) lookEntry.trackTime = Math.max(0, Math.min(1, 0.5 + tilt.x * 0.45)) * lookEntry.animationEnd * 0.999;
 
   // physics only reacts to the change of tilt, kept gentle
   const pk = +$("phys").value;
@@ -230,16 +250,19 @@ function loop(now) {
   state.update(dt); state.apply(skeleton);
   // head faces the viewer through the rig's own Face_CTRL_1 (world offset -> parent local)
   const vk = +$("depth").value;
+  // face turns less than the view and is clamped so it never over-rotates
+  const fk = +$("face").value, fx = Math.max(-1, Math.min(1, tilt.x)), fy = Math.max(-1, Math.min(1, tilt.y));
   if (faceCtrl && faceCtrl.parent) {
-    const p = faceCtrl.parent, a = new spine.Vector2(faceCtrl.worldX, faceCtrl.worldY), b = new spine.Vector2(faceCtrl.worldX + tilt.x * 170 * vk, faceCtrl.worldY - tilt.y * 110 * vk);
+    const p = faceCtrl.parent, a = new spine.Vector2(faceCtrl.worldX, faceCtrl.worldY), b = new spine.Vector2(faceCtrl.worldX + fx * 150 * fk, faceCtrl.worldY - fy * 90 * fk);
     p.worldToLocal(a); p.worldToLocal(b); faceCtrl.x += b.x - a.x; faceCtrl.y += b.y - a.y;
   }
   skeleton.update(dt);
   skeleton.updateWorldTransform(spine.Physics.update);
 
   // viewpoint: the whole character turns rigidly, the backdrop slides the other way
-  canvas.style.transform = `perspective(1400px) rotateY(${tilt.x * 9 * vk}deg) rotateX(${-tilt.y * 5 * vk}deg)`;
-  backdrop.style.transform = `translate(${-tilt.x * 28 * vk}px, ${-tilt.y * 18 * vk}px)`;
+  canvas.style.transform = `perspective(1100px) rotateY(${tilt.x * 20 * vk}deg) rotateX(${-tilt.y * 10 * vk}deg) translate3d(${tilt.x * 14 * vk}px, 0, 0) scale(${bounce})`;
+  bounce += (1 - bounce) * 0.2;
+  backdrop.style.transform = `translate(${-tilt.x * 60 * vk}px, ${-tilt.y * 36 * vk}px)`;
 
   // camera
   fit();
