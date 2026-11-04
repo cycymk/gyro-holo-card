@@ -22,6 +22,8 @@ body.nobg .bgimg{opacity:0}
 .backdrop{position:absolute;inset:-8%;background:radial-gradient(60% 45% at 50% 42%,rgba(44,37,54,.7) 0%,rgba(23,20,28,0) 70%);will-change:transform}
 /* canvas is 30% larger than the screen so the 3D turn never shows its edge */
 canvas{position:absolute;left:-15%;top:-15%;width:130%;height:130%;display:block;will-change:transform}
+.floorfade{position:absolute;left:0;right:0;bottom:0;height:12%;background:linear-gradient(to top,rgba(168,98,10,.96) 0%,rgba(190,110,11,.7) 35%,rgba(199,115,11,0) 100%);pointer-events:none}
+body.nobg .floorfade{background:linear-gradient(to top,rgba(23,20,28,.95),rgba(23,20,28,0))}
 .dim{position:absolute;inset:0;background:#05040a;opacity:.62;pointer-events:none;transition:opacity 1.6s ease}
 body.awake .dim{opacity:0}
 button{font:inherit;font-size:13px;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:999px;padding:7px 12px;cursor:pointer}
@@ -85,6 +87,7 @@ body.settings .sheet{transform:none;opacity:1}
   <div class="bgimg" id="bgimg"></div>
   <div class="backdrop" id="backdrop"></div>
   <canvas id="c"></canvas>
+  <div class="floorfade"></div>
   <div class="dim"></div>
 </div>
 <div class="toast" id="toast"></div>
@@ -235,7 +238,7 @@ function onPart(g, wx, wy) {
 
 // ---- camera: pinch to zoom, two-finger pan, double tap toggles ----
 // B = the whole character; the view never goes below the seat cushion (FLOOR) and zoom 1 always shows all of her
-const B = { x0: -650, x1: 550, y0: -470, y1: 1590 }, ZMIN = 1.06; // y0: just into the stool body, its cut-off base stays hidden
+const B = { x0: -650, x1: 550, y0: -400, y1: 1590 }, ZMIN = 1.06; // y0: just into the stool body, its cut-off base stays hidden
 const cam = { z: 1, cx: (B.x0 + B.x1) / 2, cy: (B.y0 + B.y1) / 2 }, camT = { ...cam };
 let viewS = 1;
 function baseScale() { const W = innerWidth * DPR, H = VH() * DPR; return Math.min(W / (B.x1 - B.x0), H / (B.y1 - B.y0)); }
