@@ -140,10 +140,18 @@ function scheduler() {
 
 // ---------------- power ----------------
 let awake = false, restTarget = 1, idleTalkT;
+// keep the screen on while she's awake (phone lying down = music mode shouldn't lock the screen)
+let wakeLock = null;
+async function holdScreen(on) {
+  try { if (on && "wakeLock" in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.onrelease = () => { wakeLock = null; }; } else if (!on && wakeLock) { wakeLock.release(); wakeLock = null; } } catch (e) {}
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") { if (awake) holdScreen(true); if (ac && ac.state !== "running") ac.resume(); }
+});
 function setPower(on) {
   initAudio(); if (ac.state === "suspended") ac.resume();
   if (on === awake) return;
-  awake = on;
+  awake = on; holdScreen(on);
   if (on) {
     document.body.classList.add("booting"); setMode("啟動中…");
     try { vEl.muted = true; vEl.src = Object.values(VOICE)[0] || ""; vEl.play().then(() => { vEl.pause(); vEl.muted = false; }).catch(() => { vEl.muted = false; }); } catch (e) {} // unlock iOS audio

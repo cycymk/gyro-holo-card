@@ -13,11 +13,11 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
-:root{--bg:#17141c;--panel:rgba(24,20,30,.82);--line:rgba(255,255,255,.14);--fg:#f3eef8;--mute:#b5abc3;--accent:#ff8a5c;--cyan:#56d6e6;color-scheme:dark}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC",sans-serif;overflow:hidden;overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+:root{--bg:#17141c;--panel:rgba(16,12,20,.42);--bb:calc(env(safe-area-inset-bottom) + 12px + var(--tb,0px));--line:rgba(255,255,255,.14);--fg:#f3eef8;--mute:#b5abc3;--accent:#ff8a5c;--cyan:#56d6e6;color-scheme:dark}
+html,body{height:100%;margin:0;background:#a8650c;color:var(--fg);font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC",sans-serif;overflow:hidden;overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 /* stage: everything that moves stays inside a clipped full-screen box, so nothing can widen the page */
-.stage{position:fixed;inset:0;overflow:hidden}
-.bgimg{position:absolute;inset:-8%;background:#c97a0c url(bg.jpg) center/cover no-repeat;will-change:transform;transition:opacity .3s}
+.stage{position:fixed;left:0;top:0;width:100%;height:100vh;height:100lvh;overflow:hidden;background:#a8650c}
+.bgimg{position:absolute;inset:-20%;background:#c97a0c url(bg.jpg) center/cover no-repeat;will-change:transform;transition:opacity .3s}
 body.nobg .bgimg{opacity:0}
 .backdrop{position:absolute;inset:-8%;background:radial-gradient(60% 45% at 50% 42%,rgba(44,37,54,.7) 0%,rgba(23,20,28,0) 70%);will-change:transform}
 /* canvas is 30% larger than the screen so the 3D turn never shows its edge */
@@ -28,7 +28,7 @@ button{font:inherit;font-size:13px;color:var(--fg);background:transparent;border
 button.primary{background:var(--cyan);border-color:var(--cyan);color:#082429;font-weight:700}
 button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#2a0f04}
 /* minimal layer: always present */
-.pill{position:fixed;left:max(12px,env(safe-area-inset-left));top:calc(10px + env(safe-area-inset-top));display:flex;align-items:center;gap:8px;font-size:12px;background:rgba(10,8,14,.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:999px;padding:4px 14px 4px 4px;z-index:5;transition:opacity .4s}
+.pill{position:fixed;transition:opacity .35s,transform .45s cubic-bezier(.2,.8,.2,1);left:max(12px,env(safe-area-inset-left));top:calc(10px + env(safe-area-inset-top));display:flex;align-items:center;gap:8px;font-size:12px;background:rgba(10,8,14,.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:999px;padding:4px 14px 4px 4px;z-index:5;transition:opacity .4s}
 .pill .pwr{width:38px;height:38px}
 .ptxt{display:flex;align-items:center;gap:7px}
 .pill i,.mode i{width:7px;height:7px;border-radius:50%;background:var(--mute);flex:none}
@@ -36,31 +36,35 @@ body:not(.awake) .pill i,body:not(.awake) .mode i{animation:breathe 3.2s ease-in
 body.awake .pill i,body.awake .mode i{background:#6be38a}
 body.booting .pill i,body.booting .mode i{background:#ffd166;animation:breathe .6s ease-in-out infinite}
 @keyframes breathe{0%,100%{opacity:.25}50%{opacity:1}}
-body:not(.minimal) .pill{opacity:0;pointer-events:none}
-.toast{position:fixed;left:max(14px,env(safe-area-inset-left));top:calc(var(--uih,56px) + 16px + env(safe-area-inset-top));background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:999px;font-size:11px;z-index:6;opacity:0;transition:opacity .25s;pointer-events:none}
+body:not(.minimal) .pill{opacity:0;transform:translateY(-8px);pointer-events:none}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--bb) + var(--chath,0px) + var(--subh,0px) + 10px);transition:opacity .25s,bottom .3s;white-space:nowrap;background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:999px;font-size:11px;z-index:6;opacity:0;pointer-events:none;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 .toast.on{opacity:1}
-.sub{position:fixed;left:50%;transform:translateX(-50%);top:calc(var(--uih,56px) + 48px + env(safe-area-inset-top));max-width:min(86vw,520px);background:rgba(10,8,14,.66);color:#fff;font-size:14px;line-height:1.5;padding:7px 14px;border-radius:10px;opacity:0;transition:opacity .3s,top .3s;pointer-events:none;z-index:6;text-align:center}
-.sub.on{opacity:1}
+.sub{position:fixed;left:50%;transform:translateX(-50%) translateY(8px);bottom:calc(var(--bb) + var(--chath,0px) + 8px);max-width:min(86vw,520px);width:max-content;box-sizing:border-box;background:rgba(10,8,14,.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fff;font-size:14px;line-height:1.5;padding:7px 14px;border-radius:10px;opacity:0;transition:opacity .3s,transform .3s,bottom .35s;pointer-events:none;z-index:6;text-align:center}
+.sub.on{opacity:1;transform:translateX(-50%)}
 /* interaction dock */
-.ui{position:fixed;left:0;right:0;top:0;padding:calc(10px + env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) 10px max(12px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:8px;z-index:5;transition:opacity .4s,transform .4s;box-sizing:border-box}
-body.minimal .ui{opacity:0;transform:translateY(-16px);pointer-events:none}
-.dock{background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:14px;padding:8px;display:flex;gap:8px;align-items:center;min-width:0}
-.pwr{width:40px;height:40px;border-radius:50%;padding:0;font-size:17px;flex:none}
+.ui{position:fixed;left:0;right:0;top:0;padding:calc(10px + env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) 10px max(12px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:8px;z-index:5;transition:opacity .35s ease,transform .45s cubic-bezier(.2,.8,.2,1);box-sizing:border-box;pointer-events:none}
+.ui>*{pointer-events:auto}
+body.minimal .ui{opacity:0;transform:translateY(calc(-100% - 8px))}
+body.minimal .ui>*{pointer-events:none}
+.dock{background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:999px;padding:5px;display:flex;gap:6px;align-items:center;min-width:0;box-shadow:0 4px 18px rgba(0,0,0,.18)}
+.pwr{width:36px;height:36px;border-radius:50%;padding:0;font-size:17px;flex:none}
 body.awake .pwr{background:var(--cyan);border-color:var(--cyan);color:#082429}
 .mode{font-size:12px;display:flex;align-items:center;gap:6px;flex:none;white-space:nowrap}
 .vol{display:flex;align-items:center;gap:6px;flex:1;min-width:0}
 .vol input{flex:1;min-width:0;accent-color:var(--cyan)}
 body:not(.awake) .vol{visibility:hidden}
-.icon{width:40px;height:40px;border-radius:50%;padding:0;flex:none;font-size:16px}
-.chat{display:none;flex-direction:column;gap:8px}
-body.talk .chat{display:flex}
-.chips{display:flex;gap:6px;flex-wrap:wrap}
+.icon{width:36px;height:36px;border-radius:50%;padding:0;flex:none;font-size:16px}
+.chat{position:fixed;left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));bottom:var(--bb);z-index:5;flex-direction:column;gap:8px;border-radius:18px;padding:8px;display:flex;opacity:0;transform:translateY(calc(100% + var(--bb)));pointer-events:none;transition:opacity .35s ease,transform .45s cubic-bezier(.2,.8,.2,1)}
+body.talk:not(.minimal) .chat{opacity:1;transform:none;pointer-events:auto}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;touch-action:pan-x}
+.chips::-webkit-scrollbar{display:none}
+.chips button{flex:none;background:rgba(255,255,255,.06)}
 .chips button{font-size:12px;padding:5px 10px}
 .chat form{display:flex;gap:6px}
-.chat input{flex:1;min-width:0;font:inherit;font-size:16px;color:var(--fg);background:rgba(255,255,255,.07);border:1px solid var(--line);border-radius:999px;padding:7px 12px}
+.chat input{flex:1;min-width:0;font:inherit;font-size:16px;color:var(--fg);background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:999px;padding:7px 12px;-webkit-user-select:text;user-select:text}
 /* settings sheet */
-.sheet{position:fixed;left:0;right:0;top:0;z-index:8;background:rgba(20,17,26,.95);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line);border-radius:0 0 18px 18px;padding:calc(14px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 16px max(16px,env(safe-area-inset-left));transform:translateY(-105%);transition:transform .35s ease;max-height:70vh;overflow:auto;box-sizing:border-box;touch-action:pan-y}
-body.settings .sheet{transform:none}
+.sheet{position:fixed;left:0;right:0;top:0;z-index:8;background:rgba(18,14,22,.72);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line);border-radius:0 0 18px 18px;padding:calc(14px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 16px max(16px,env(safe-area-inset-left));transform:translateY(-105%);opacity:0;transition:transform .45s cubic-bezier(.2,.8,.2,1),opacity .3s;max-height:70vh;overflow:auto;box-sizing:border-box;touch-action:pan-y}
+body.settings .sheet{transform:none;opacity:1}
 .sheet h2{font-size:15px;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center}
 .sheet h3{font-size:11px;letter-spacing:.08em;color:var(--mute);margin:14px 0 8px;font-weight:600}
 .row{display:flex;gap:8px;flex-wrap:wrap}
@@ -94,17 +98,17 @@ body.settings .sheet{transform:none}
     <button class="icon" id="sense" aria-pressed="false" aria-label="鏡頭感應">◉</button>
     <button class="icon" id="setBtn" aria-label="設定">⚙</button>
   </div>
-  <div class="dock chat" id="chat">
+</div>
+<div class="dock chat" id="chat">
     <div class="chips"><button data-q="妳在做什麼？">妳在做什麼？</button><button data-q="想聽歌">想聽歌</button><button data-q="妳是誰？">妳是誰？</button><button data-q="晚安">晚安</button></div>
     <form id="chatForm"><input id="chatIn" placeholder="跟她說話…" autocomplete="off" enterkeyhint="send"><button class="primary" type="submit">送出</button></form>
   </div>
-</div>
 <div class="sheet" id="sheet" role="dialog" aria-label="設定">
   <h2>設定 <button id="setClose">完成</button></h2>
   <h3>操作</h3>
   <p class="hint">單指拖曳：轉視角　雙指捏合：縮放　雙指拖曳：移動鏡頭　點兩下：放大／回全身　點角色部位：互動</p>
   <h3>感測</h3>
-  <div class="row"><button class="primary" id="gyroBtn">啟用陀螺儀</button><button id="recal">陀螺儀歸零</button><button id="camReset">鏡頭回全身</button></div>
+  <div class="row"><button class="primary" id="gyroBtn">重新啟用陀螺儀</button><button id="recal">陀螺儀歸零</button><button id="camReset">鏡頭回全身</button></div>
   <h3>畫面</h3>
   <div class="row"><button id="fs">全螢幕</button><button id="bgBtn" aria-pressed="true">背景</button><button id="dbg" aria-pressed="false">顯示部位</button><button id="st00" aria-pressed="true">00 Idle</button><button id="st10" aria-pressed="false">10 Idle</button></div>
   <h3>強度</h3>
@@ -113,7 +117,7 @@ body.settings .sheet{transform:none}
   <label><span>擺動</span><input id="phys" type="range" min="0" max="2" step="0.05" value="0.6"></label>
   <h3>聲音</h3>
   <div class="row"><button id="voiceTgl" aria-pressed="true">角色語音</button><button id="autoMin" aria-pressed="true">閒置自動精簡</button></div>
-  <p class="hint" id="status">陀螺儀未啟用</p>
+  <p class="hint" id="status">陀螺儀預設開啟（iPhone 第一次點畫面時會詢問權限）</p>
 </div>
 <script src="spine-webgl.min.js"></script>
 <script src="voice.js"></script>
@@ -122,6 +126,7 @@ body.settings .sheet{transform:none}
 (() => {
 const $ = id => document.getElementById(id);
 const LG = window.LG = window.LG || {}; if (LG.rest == null) LG.rest = 0;
+const stageEl = $("stage"), VH = () => stageEl.clientHeight || innerHeight;
 const canvas = $("c"), statusEl = $("status"), toastEl = $("toast");
 const ctx = new spine.ManagedWebGLRenderingContext(canvas, { alpha: true, premultipliedAlpha: true });
 const gl = ctx.gl;
@@ -193,19 +198,28 @@ $("dbg").onclick = () => { showParts = !showParts; $("dbg").setAttribute("aria-p
 let idleT;
 LG.minimalLock = false; // interact.js sets this in listen mode
 function setMinimal(on) { document.body.classList.toggle("minimal", on); updateSubPos(); }
-function updateSubPos() { document.body.style.setProperty("--uih", (document.body.classList.contains("minimal") ? 46 : $("ui").offsetHeight - 10) + "px"); }
+function updateSubPos() {
+  const b = document.body.classList, st = document.body.style;
+  st.setProperty("--chath", (b.contains("talk") && !b.contains("minimal") ? $("chat").offsetHeight + 8 : 0) + "px");
+  const sub = $("sub"); st.setProperty("--subh", (sub.classList.contains("on") ? sub.offsetHeight + 6 : 0) + "px");
+}
+LG.updateSubPos = updateSubPos;
+new MutationObserver(updateSubPos).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+new MutationObserver(updateSubPos).observe($("sub"), { attributes: true, attributeFilter: ["class"] });
+// iOS Safari (not home-screen app): its floating bottom toolbar covers the last ~60px
+if (/iP(hone|od|ad)/.test(navigator.userAgent) && !navigator.standalone && !matchMedia("(display-mode: standalone)").matches) document.documentElement.style.setProperty("--tb", "58px");
 LG.poke = () => {
   if (LG.minimalLock) return;
   setMinimal(false); clearTimeout(idleT);
   if ($("autoMin").getAttribute("aria-pressed") === "true") idleT = setTimeout(() => { if (!document.body.classList.contains("settings") && !document.body.classList.contains("talk")) setMinimal(true); }, 8000);
 };
 LG.setMinimal = setMinimal;
-document.addEventListener("pointerdown", e => { if (!e.target.closest("canvas")) LG.poke(); }, true);
+document.addEventListener("pointerdown", e => { if (!e.target.closest("canvas,#pwr2")) LG.poke(); }, true);
 $("pillTxt").onclick = () => LG.poke();
 $("setBtn").onclick = () => { document.body.classList.add("settings"); clearTimeout(idleT); };
 $("setClose").onclick = () => { document.body.classList.remove("settings"); LG.poke(); };
 $("autoMin").onclick = () => { const on = $("autoMin").getAttribute("aria-pressed") !== "true"; $("autoMin").setAttribute("aria-pressed", on); LG.poke(); };
-new ResizeObserver(updateSubPos).observe($("ui"));
+new ResizeObserver(updateSubPos).observe($("chat"));
 
 let toastT;
 function toast(t) { toastEl.textContent = t; toastEl.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove("on"), 900); }
@@ -221,25 +235,25 @@ function onPart(g, wx, wy) {
 
 // ---- camera: pinch to zoom, two-finger pan, double tap toggles ----
 // B = the whole character; the view never goes below the seat cushion (FLOOR) and zoom 1 always shows all of her
-const B = { x0: -650, x1: 550, y0: -320, y1: 1590 };
+const B = { x0: -650, x1: 550, y0: -470, y1: 1590 }, ZMIN = 1.06; // y0: just into the stool body, its cut-off base stays hidden
 const cam = { z: 1, cx: (B.x0 + B.x1) / 2, cy: (B.y0 + B.y1) / 2 }, camT = { ...cam };
 let viewS = 1;
-function baseScale() { const W = innerWidth * DPR, H = innerHeight * DPR; return Math.min(W / (B.x1 - B.x0), H / (B.y1 - B.y0)); }
+function baseScale() { const W = innerWidth * DPR, H = VH() * DPR; return Math.min(W / (B.x1 - B.x0), H / (B.y1 - B.y0)); }
 function clampCam(c) {
-  c.z = Math.max(1, Math.min(4, c.z));
-  const s = baseScale() * c.z, hw = innerWidth * DPR / 2 / s, hh = innerHeight * DPR / 2 / s;
+  c.z = Math.max(ZMIN, Math.min(4, c.z));
+  const s = baseScale() * c.z, hw = innerWidth * DPR / 2 / s, hh = VH() * DPR / 2 / s;
   c.cx = hw * 2 >= B.x1 - B.x0 ? (B.x0 + B.x1) / 2 : Math.max(B.x0 + hw, Math.min(B.x1 - hw, c.cx));
   c.cy = hh * 2 >= B.y1 - B.y0 ? B.y0 + hh : Math.max(B.y0 + hh, Math.min(B.y1 - hh, c.cy));
   return c;
 }
 function zoomAt(px, py, z) { // keep the world point under (px,py) fixed while zooming
   const w = screenToWorld(px, py, camT); camT.z = z; const s = baseScale() * camT.z;
-  camT.cx = w.x - (px - innerWidth / 2) * DPR / s; camT.cy = w.y + (py - innerHeight / 2) * DPR / s; clampCam(camT);
+  camT.cx = w.x - (px - innerWidth / 2) * DPR / s; camT.cy = w.y + (py - VH() / 2) * DPR / s; clampCam(camT);
 }
-function resetCam() { camT.z = 1; clampCam(camT); }
+function resetCam() { camT.z = ZMIN; camT.cx = 20; clampCam(camT); }
 function screenToWorld(px, py, c = cam) {
   const s = baseScale() * c.z;
-  return { x: c.cx + (px - innerWidth / 2) * DPR / s, y: c.cy - (py - innerHeight / 2) * DPR / s };
+  return { x: c.cx + (px - innerWidth / 2) * DPR / s, y: c.cy - (py - VH() / 2) * DPR / s };
 }
 $("camReset").onclick = resetCam;
 const SHOT = { sleep: { z: 1.6, cx: -60, cy: 930 }, wake: { z: 2.0, cx: -170, cy: 1060 } };
@@ -286,7 +300,7 @@ canvas.addEventListener("pointermove", e => {
     pinch = p; return;
   }
   if (!down || multi) return;
-  const dx = (e.clientX - last.x) / innerWidth, dy = (e.clientY - last.y) / innerHeight; last = { x: e.clientX, y: e.clientY };
+  const dx = (e.clientX - last.x) / innerWidth, dy = (e.clientY - last.y) / VH(); last = { x: e.clientX, y: e.clientY };
   drag.x = Math.max(-1.6, Math.min(1.6, drag.x + dx * 3)); drag.y = Math.max(-1.6, Math.min(1.6, drag.y + dy * 3));
 });
 function feedback(x, y, hit) {
@@ -309,7 +323,7 @@ function endPtr(e) {
     if (moved < 10 && dt < 400) {
       const now = performance.now();
       if (now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) { // double tap
-        if (camT.z > 1.2) resetCam(); else zoomAt(e.clientX, e.clientY, 2.4);
+        if (camT.z > ZMIN + 0.15) resetCam(); else zoomAt(e.clientX, e.clientY, 2.4);
         lastTap.t = 0;
       } else {
         lastTap = { t: now, x: e.clientX, y: e.clientY };
@@ -332,16 +346,23 @@ function onOrient(e) {
   gyro.x = c((e.gamma - gyroBase.g) / 20); gyro.y = c((e.beta - gyroBase.b) / 20);
   if (!gyroOn) { gyroOn = true; statusEl.textContent = "陀螺儀已啟用"; $("gyroBtn").textContent = "陀螺儀已啟用"; }
 }
-$("gyroBtn").onclick = async () => {
+let gyroAsked = false;
+async function enableGyro() {
+  if (gyroAsked) return; gyroAsked = true;
   try {
     if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function") {
-      if (await DeviceOrientationEvent.requestPermission() !== "granted") { statusEl.textContent = "未允許動作感測"; return; }
+      if (await DeviceOrientationEvent.requestPermission() !== "granted") { gyroAsked = false; statusEl.textContent = "未允許動作感測"; return; }
     }
     addEventListener("deviceorientation", onOrient);
     statusEl.textContent = "等待感測器…";
     setTimeout(() => { if (!gyroOn) statusEl.textContent = "讀不到陀螺儀（需要 HTTPS 和手機）"; }, 1500);
-  } catch (err) { statusEl.textContent = "讀不到陀螺儀"; }
-};
+  } catch (err) { gyroAsked = false; statusEl.textContent = "讀不到陀螺儀"; }
+}
+$("gyroBtn").onclick = () => { gyroAsked = false; enableGyro(); };
+// gyro on by default: Android/desktop start right away; iOS needs one tap, so the first tap anywhere asks
+const needsAsk = window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function";
+if (!needsAsk) enableGyro();
+else { const first = () => { enableGyro(); removeEventListener("touchend", first, true); removeEventListener("click", first, true); }; addEventListener("touchend", first, true); addEventListener("click", first, true); }
 const backdrop = $("backdrop"), bgimg = $("bgimg");
 $("bgBtn").onclick = () => { const on = document.body.classList.toggle("nobg"); $("bgBtn").setAttribute("aria-pressed", !on); };
 $("fs").onclick = () => {
@@ -407,7 +428,8 @@ function loop(now) {
   canvas.style.transform = `perspective(1100px) rotateY(${tilt.x * 20 * vk}deg) rotateX(${-tilt.y * 10 * vk}deg) translate3d(${tilt.x * 14 * vk}px, 0, 0) scale(${bounce})`;
   bounce += (1 - bounce) * 0.2;
   backdrop.style.transform = `translate(${-tilt.x * 60 * vk}px, ${-tilt.y * 36 * vk}px)`;
-  bgimg.style.transform = `translate(${-tilt.x * 45 * vk}px, ${-tilt.y * 28 * vk}px)`;
+  const lim = Math.min(innerWidth, VH()) * 0.16, cl = v => Math.max(-lim, Math.min(lim, v));
+  bgimg.style.transform = `translate(${cl(-tilt.x * 45 * vk)}px, ${cl(-tilt.y * 28 * vk)}px)`;
 
   // camera (smoothly follows the gesture target)
   for (const k of ["z", "cx", "cy"]) cam[k] += (camT[k] - cam[k]) * 0.22;
