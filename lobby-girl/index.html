@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lobby Girl Gyro</title>
+<style>
+:root{--bg:#17141c;--panel:rgba(29,25,36,.86);--line:#3a3245;--fg:#f3eef8;--mute:#a79cb6;--accent:#ff8a5c;--cyan:#56d6e6;color-scheme:dark}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC",sans-serif;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+.ui{position:fixed;left:0;right:0;bottom:0;padding:10px max(14px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.bar{pointer-events:auto;background:var(--panel);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:12px;padding:8px 10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button{font:inherit;font-size:13px;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+button.primary{background:var(--cyan);border-color:var(--cyan);color:#082429;font-weight:700}
+button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#2a0f04}
+label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mute);white-space:nowrap;flex:1;min-width:120px}
+label input{flex:1;accent-color:var(--accent)}
+.top{position:fixed;top:calc(10px + env(safe-area-inset-top));left:14px;right:14px;display:flex;justify-content:space-between;font-size:12px;color:var(--mute);pointer-events:none}
+.toast{position:fixed;left:50%;top:18%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);padding:6px 14px;border-radius:999px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.on{opacity:1}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top"><span>Lobby Girl · Spine 4.2</span><span id="status">拖曳看角度，點部位互動</span></div>
+<div class="toast" id="toast"></div>
+<div class="ui">
+  <div class="bar">
+    <button class="primary" id="gyroBtn">啟用陀螺儀</button>
+    <button id="recal">歸零</button>
+    <button id="st00" aria-pressed="true">00 Idle</button>
+    <button id="st10" aria-pressed="false">10 Idle</button>
+    <button id="dbg" aria-pressed="false">部位</button>
+  </div>
+  <div class="bar">
+    <label>立體 <input id="depth" type="range" min="0" max="2" step="0.05" value="1"></label>
+    <label>擺動 <input id="phys" type="range" min="0" max="2" step="0.05" value="1"></label>
+  </div>
+</div>
+<script src="spine-webgl.min.js"></script>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const canvas = $("c"), statusEl = $("status"), toastEl = $("toast");
+const ctx = new spine.ManagedWebGLRenderingContext(canvas, { alpha: false });
+const gl = ctx.gl;
+const am = new spine.AssetManager(ctx);
+am.loadBinary("girl.skel"); am.loadTextureAtlas("girl.atlas");
+
+let skeleton, state, sd, renderer, shapes, boneDepth, lookEntry, baseX = 0, baseY = 0;
+const tilt = { x: 0, y: 0 }, gyro = { x: 0, y: 0 }, drag = { x: 0, y: 0 };
+let gyroBase = null, gyroRaw = null, gyroOn = false, idleState = "00_Idle_ani", busy = false, showParts = false;
+
+// ---- part groups (slot name → group) ----
+const GROUPS = [
+  { key: "head", label: "頭部", test: n => /^(Face|Hair|eye|pupil|eyelash|close eye|eyebrow|eyeLight|eyewhite|eyepupil|mouth|teeth|Neck)/i.test(n) },
+  { key: "arm",  label: "手臂", test: n => /(Arm|arm_r1|finger)/i.test(n) },
+  { key: "leg",  label: "腿",   test: n => /(thigh|calf)/i.test(n) },
+  { key: "body", label: "身體", test: n => /(Body|Breast|shadow)/i.test(n) },
+];
+const groupOf = n => (GROUPS.find(g => g.test(n)) || { key: "other", label: "其他" });
+
+function init() {
+  const atlas = am.require("girl.atlas");
+  const bin = new spine.SkeletonBinary(new spine.AtlasAttachmentLoader(atlas));
+  sd = bin.readSkeletonData(am.require("girl.skel"));
+  skeleton = new spine.Skeleton(sd);
+  skeleton.setToSetupPose();
+  skeleton.updateWorldTransform(spine.Physics.reset);
+
+  const asd = new spine.AnimationStateData(sd); asd.defaultMix = 0.25;
+  state = new spine.AnimationState(asd);
+  state.setAnimation(0, idleState, true);
+  lookEntry = state.setAnimation(2, "02_Look_ani", false); lookEntry.timeScale = 0; lookEntry.mixDuration = 0;
+  scheduleBlink();
+
+  // depth per bone from draw order of the meshes weighted to it (later = nearer)
+  const n = sd.slots.length, sum = new Float32Array(sd.bones.length), cnt = new Float32Array(sd.bones.length);
+  skeleton.slots.forEach((slot, i) => {
+    const a = slot.getAttachment(); if (!a || !a.bones) return;
+    const d = i / (n - 1) - 0.5;
+    for (let k = 0; k < a.bones.length;) { const c = a.bones[k++]; for (let j = 0; j < c; j++) { const b = a.bones[k++]; sum[b] += d; cnt[b]++; } }
+  });
+  boneDepth = Array.from(sum, (s, i) => cnt[i] ? s / cnt[i] : 0);
+  // bones with no meshes inherit from parent
+  sd.bones.forEach((b, i) => { if (!cnt[i] && b.parent) boneDepth[i] = boneDepth[b.parent.index]; });
+
+  renderer = new spine.SceneRenderer(canvas, ctx, true);
+  shapes = renderer.shapes;
+  resize(); addEventListener("resize", resize);
+  requestAnimationFrame(loop);
+}
+
+function resize() {
+  const d = Math.min(devicePixelRatio || 1, 2);
+  canvas.width = Math.round(innerWidth * d); canvas.height = Math.round(innerHeight * d);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+
+// ---- animations ----
+function scheduleBlink() { setTimeout(() => { if (state) { const e = state.setAnimation(1, "01_Eye_ani", false); e.mixDuration = 0.1; state.addEmptyAnimation(1, 0.2, 0); } scheduleBlink(); }, 2500 + Math.random() * 3500); }
+function playActive() {
+  if (busy) return; busy = true;
+  state.setAnimation(0, "20_Active_ani", false);
+  const e = state.addAnimation(0, idleState, true, 0);
+  e.listener = { start: () => { busy = false; } };
+}
+function setIdle(name) {
+  idleState = name; $("st00").setAttribute("aria-pressed", name === "00_Idle_ani"); $("st10").setAttribute("aria-pressed", name === "10_Idle_ani");
+  if (!busy) state.setAnimation(0, name, true);
+}
+$("st00").onclick = () => setIdle("00_Idle_ani");
+$("st10").onclick = () => setIdle("10_Idle_ani");
+$("dbg").onclick = () => { showParts = !showParts; $("dbg").setAttribute("aria-pressed", showParts); };
+
+let toastT;
+function toast(t) { toastEl.textContent = t; toastEl.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove("on"), 900); }
+
+function onPart(g, wx, wy) {
+  const k = +$("phys").value;
+  if (g.key === "head") { const e = state.setAnimation(1, "01_Eye_ani", false); e.mixDuration = 0.05; state.addEmptyAnimation(1, 0.2, 0); skeleton.physicsTranslate(40 * k, 25 * k); toast("頭部：眨眼 + 甩髮"); }
+  else if (g.key === "arm") { playActive(); toast("手臂：20_Active"); }
+  else if (g.key === "leg") { setIdle(idleState === "00_Idle_ani" ? "10_Idle_ani" : "00_Idle_ani"); toast("腿：切換 " + idleState.slice(0, 7)); }
+  else if (g.key === "body") { playActive(); skeleton.physicsTranslate(0, -30 * k); toast("身體：20_Active"); }
+}
+
+// ---- view transform ----
+let view = { s: 1, ox: 0, oy: 0 };
+function fit() {
+  const W = canvas.width, H = canvas.height, bw = sd.width, bh = sd.height;
+  const s = Math.min(W / (bw * 1.15), (H * 0.86) / bh);
+  view = { s, ox: W / 2 - (sd.x + bw / 2) * s, oy: H * 0.56 - (sd.y + bh / 2) * s };
+}
+function screenToWorld(px, py) { // px,py in CSS px
+  const d = canvas.width / canvas.clientWidth, x = px * d, y = (canvas.clientHeight - py) * d;
+  const cam = renderer.camera; const W = canvas.width, H = canvas.height;
+  return { x: cam.position.x + (x - W / 2) * cam.zoom, y: cam.position.y + (y - H / 2) * cam.zoom };
+}
+
+// ---- hit test ----
+const verts = new Float32Array(20000);
+function hitSlot(wx, wy) {
+  const order = skeleton.drawOrder;
+  for (let i = order.length - 1; i >= 0; i--) {
+    const slot = order[i], a = slot.getAttachment();
+    if (!a || !a.triangles || slot.color.a === 0) continue;
+    const n = a.worldVerticesLength; a.computeWorldVertices(slot, 0, n, verts, 0, 2);
+    const t = a.triangles;
+    for (let j = 0; j < t.length; j += 3) {
+      const ax = verts[t[j]*2], ay = verts[t[j]*2+1], bx = verts[t[j+1]*2], by = verts[t[j+1]*2+1], cx = verts[t[j+2]*2], cy = verts[t[j+2]*2+1];
+      const d1 = (wx-bx)*(ay-by)-(ax-bx)*(wy-by), d2 = (wx-cx)*(by-cy)-(bx-cx)*(wy-cy), d3 = (wx-ax)*(cy-ay)-(cx-ax)*(wy-ay);
+      if (!(((d1<0)||(d2<0)||(d3<0)) && ((d1>0)||(d2>0)||(d3>0)))) {
+        // ignore fully transparent texels is costly; accept triangle hit
+        return slot;
+      }
+    }
+  }
+  return null;
+}
+
+// ---- input ----
+let down = null, last = null;
+canvas.addEventListener("pointerdown", e => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; last = { ...down }; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener("pointermove", e => {
+  if (!down) return;
+  const dx = (e.clientX - last.x) / innerWidth, dy = (e.clientY - last.y) / innerHeight; last = { x: e.clientX, y: e.clientY };
+  drag.x = Math.max(-1.6, Math.min(1.6, drag.x + dx * 3)); drag.y = Math.max(-1.6, Math.min(1.6, drag.y + dy * 3));
+});
+canvas.addEventListener("pointerup", e => {
+  if (!down) return;
+  const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y), dt = performance.now() - down.t;
+  if (moved < 10 && dt < 400) {
+    const w = screenToWorld(e.clientX, e.clientY), slot = hitSlot(w.x, w.y);
+    if (slot) onPart(groupOf(slot.data.name), w.x, w.y);
+  }
+  down = null;
+});
+canvas.addEventListener("pointercancel", () => down = null);
+
+function onOrient(e) {
+  if (e.gamma == null) return;
+  gyroRaw = { g: e.gamma, b: e.beta };
+  if (!gyroBase) gyroBase = { ...gyroRaw };
+  const c = v => Math.max(-1.4, Math.min(1.4, v));
+  gyro.x = c((e.gamma - gyroBase.g) / 20); gyro.y = c((e.beta - gyroBase.b) / 20);
+  if (!gyroOn) { gyroOn = true; statusEl.textContent = "陀螺儀已啟用"; $("gyroBtn").hidden = true; }
+}
+$("gyroBtn").onclick = async () => {
+  try {
+    if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function") {
+      if (await DeviceOrientationEvent.requestPermission() !== "granted") { statusEl.textContent = "未允許動作感測"; return; }
+    }
+    addEventListener("deviceorientation", onOrient);
+    statusEl.textContent = "等待感測器…";
+    setTimeout(() => { if (!gyroOn) statusEl.textContent = "讀不到陀螺儀（需要 HTTPS 和手機）"; }, 1500);
+  } catch (err) { statusEl.textContent = "讀不到陀螺儀"; }
+};
+$("recal").onclick = () => { gyroBase = gyroRaw ? { ...gyroRaw } : null; drag.x = drag.y = 0; };
+
+// ---- loop ----
+let lastT = performance.now(), prevTilt = { x: 0, y: 0 };
+function loop(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+  if (!down) { drag.x *= 0.92; drag.y *= 0.92; }
+  const tx = gyro.x + drag.x, ty = gyro.y + drag.y;
+  tilt.x += (tx - tilt.x) * 0.16; tilt.y += (ty - tilt.y) * 0.16;
+
+  // eyes follow the viewer: scrub the look animation by tilt
+  if (lookEntry) lookEntry.trackTime = Math.max(0, Math.min(1, 0.5 + tilt.x * 0.35)) * lookEntry.animationEnd * 0.999;
+
+  // body sway feeds the physics constraints (hair, chest...)
+  const pk = +$("phys").value;
+  skeleton.physicsTranslate((tilt.x - prevTilt.x) * -260 * pk, (tilt.y - prevTilt.y) * 160 * pk);
+  prevTilt = { x: tilt.x, y: tilt.y };
+
+  state.update(dt); state.apply(skeleton);
+  skeleton.update(dt);
+  skeleton.updateWorldTransform(spine.Physics.update);
+
+  // pseudo 3D: shift each bone by its depth (parallax), slight horizontal squash like turning
+  const K = 120 * +$("depth").value;
+  const bones = skeleton.bones;
+  for (let i = 0; i < bones.length; i++) { const d = boneDepth[i]; bones[i].worldX += tilt.x * d * K; bones[i].worldY -= tilt.y * d * K * 0.6; }
+
+  // camera
+  fit();
+  const cam = renderer.camera; cam.setViewport(canvas.width, canvas.height);
+  cam.zoom = 1 / view.s;
+  cam.position.x = (canvas.width / 2 - view.ox) / view.s - tilt.x * 25;
+  cam.position.y = (canvas.height / 2 - view.oy) / view.s + tilt.y * 15;
+
+  gl.clearColor(0.09, 0.08, 0.11, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  renderer.begin();
+  renderer.drawSkeleton(skeleton, true);
+  if (showParts) {
+    renderer.end(); renderer.begin();
+    const cols = { head: [0.34, 0.84, 0.9], arm: [1, 0.54, 0.36], leg: [0.6, 0.9, 0.4], body: [0.9, 0.5, 0.9], other: [0.7, 0.7, 0.7] };
+    for (const slot of skeleton.drawOrder) {
+      const a = slot.getAttachment(); if (!a || !a.triangles) continue;
+      const g = groupOf(slot.data.name).key, c = cols[g];
+      a.computeWorldVertices(slot, 0, a.worldVerticesLength, verts, 0, 2);
+      const col = new spine.Color(c[0], c[1], c[2], 0.5);
+      const h = a.hullLength; for (let j = 0; j < h; j += 2) { const k2 = (j + 2) % h; renderer.line(verts[j], verts[j+1], verts[k2], verts[k2+1], col); }
+    }
+  }
+  renderer.end();
+  requestAnimationFrame(loop);
+}
+
+(function wait() {
+  if (am.hasErrors()) { statusEl.textContent = "素材載入失敗：" + JSON.stringify(am.getErrors()); return; }
+  if (!am.isLoadingComplete()) return setTimeout(wait, 50);
+  init();
+})();
+})();
+</script>
+</body>
+</html>
