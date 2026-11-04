@@ -74,6 +74,8 @@ body.settings .sheet{transform:none;opacity:1}
 .sheet label span{width:3em;flex:none;color:var(--mute)}
 .sheet label input{flex:1;min-width:0;accent-color:var(--accent)}
 .hint{font-size:12px;color:var(--mute);line-height:1.6;margin:4px 0 0}
+.openapp{position:fixed;left:50%;bottom:calc(var(--bb) + var(--chath,0px) + var(--subh,0px) + 44px);transform:translate(-50%,10px);background:var(--cyan);color:#082429;font-weight:700;font-size:14px;text-decoration:none;padding:10px 18px;border-radius:999px;z-index:7;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;white-space:nowrap}
+.openapp.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 .ripple{position:fixed;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;border:2px solid var(--cyan);pointer-events:none;animation:rip .6s ease-out forwards;z-index:4}
 .ripple.hit{border-color:var(--accent);box-shadow:0 0 18px var(--accent)}
 .spark{position:fixed;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:var(--accent);pointer-events:none;z-index:4;animation:spark .55s ease-out forwards}
@@ -98,6 +100,7 @@ body.settings .sheet{transform:none;opacity:1}
     <button class="pwr" id="pwr" aria-label="開機或休眠">⏻</button>
     <div class="mode"><i></i><span id="modeTxt">休眠待機</span></div>
     <label class="vol" aria-label="音量">🔈<input id="vol" type="range" min="0" max="1" step="0.01" value="0.6"></label>
+    <button class="icon" id="mic" aria-pressed="false" aria-label="語音控制">🎙</button>
     <button class="icon" id="sense" aria-pressed="false" aria-label="鏡頭感應">◉</button>
     <button class="icon" id="setBtn" aria-label="設定">⚙</button>
   </div>
@@ -109,6 +112,7 @@ body.settings .sheet{transform:none;opacity:1}
 <div class="sheet" id="sheet" role="dialog" aria-label="設定">
   <h2>設定 <button id="setClose">完成</button></h2>
   <h3>操作</h3>
+  <p class="hint">🎙 語音控制：說「Hey 拉比」喚醒、「播音樂」打開 Music、「拉比，打開 Podcast」打開 Podcast。</p>
   <p class="hint">單指拖曳：轉視角　雙指捏合：縮放　雙指拖曳：移動鏡頭　點兩下：放大／回全身　點角色部位：互動</p>
   <h3>感測</h3>
   <div class="row"><button class="primary" id="gyroBtn">重新啟用陀螺儀</button><button id="recal">陀螺儀歸零</button><button id="camReset">鏡頭回全身</button></div>

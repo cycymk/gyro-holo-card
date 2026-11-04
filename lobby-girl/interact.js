@@ -15,6 +15,9 @@ const LINES = {
   sleep:  ["我先休息一下……有事再叫醒我。", "進入待機。晚安。"],
   face:   ["啊，你在看我。", "嗨，看得到你喔。", "你拿起手機了，要跟我說話嗎？"],
   listen: ["那我就安靜陪你聽歌。", "放著也好，我會一直在。"],
+  heard:  ["嗯？我在。", "叫我嗎？我醒著喔。"],
+  music:  ["好，幫你打開 Music。"],
+  podcast:["好，幫你打開 Podcast。"],
 };
 const REPLIES = [
   [/做什麼|在幹嘛|幹嘛/, ["在發呆，順便等你呀。", "我在發呆，看灰塵飄來飄去。"]],
@@ -32,11 +35,69 @@ function wireUI() {
   $("pwr").onclick = $("pwr2").onclick = () => setPower(!awake);
   $("vol").oninput = e => setVolume(+e.target.value);
   $("sense").onclick = toggleSense;
+  $("mic").onclick = toggleMic;
   document.querySelectorAll("#chat [data-q]").forEach(b => b.onclick = () => ask(b.dataset.q));
   $("chatForm").onsubmit = e => { e.preventDefault(); const v = $("chatIn").value.trim(); if (v) ask(v); $("chatIn").value = ""; };
   $("voiceTgl").onclick = () => { voiceOn = !voiceOn; $("voiceTgl").setAttribute("aria-pressed", voiceOn); };
 }
 function setMode(t) { $("modeTxt").textContent = t; $("modeTxt2").textContent = t; }
+
+// ---------------- voice control: "Hey 拉比" wakes her; "播音樂" → Music, "打開 Podcast" → Podcasts ----------------
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const isIOS = /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const WAKE = /(hey|hi|嘿|黑|嗨|海|欸|诶|喂)?\s*(拉|辣|啦|喇|蠟|腊)\s*(比|筆|笔|必|逼|b|鼻)/i;
+const CMD_MUSIC = /(播|放|開|开|打開|打开).{0,3}(音樂|音乐|music|歌)/i;
+const CMD_POD = /(podcast|播客|pod\s*cast|帕德|波德卡斯)/i;
+let rec = null, micOn = false, lastCmd = 0;
+const APP = {
+  music:   isIOS ? "music://" : "intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.APP_MUSIC;end",
+  podcast: isIOS ? "podcasts://" : "https://music.youtube.com/podcasts",
+};
+function openApp(kind) {
+  say(pick(LINES[kind]), { force: true });
+  // give her line a moment, then pause our own music so it doesn't play over the app
+  setTimeout(() => {
+    if (playing) { playing = false; applyBgm(0.6); LG.toast && LG.toast("背景音樂已暫停（按 ⏻ 或音量可恢復）"); }
+    const a = document.createElement("a"); a.href = APP[kind]; a.rel = "noopener"; if (/^https?:/.test(APP[kind])) a.target = "_blank"; document.body.appendChild(a); a.click(); a.remove();
+    // if the browser blocked the jump (no tap), offer a one-tap button
+    setTimeout(() => { if (document.visibilityState === "visible") offerOpen(kind); }, 1200);
+  }, 1300);
+}
+function offerOpen(kind) {
+  let b = $("openApp");
+  if (!b) { b = document.createElement("a"); b.id = "openApp"; b.className = "openapp"; document.body.appendChild(b); }
+  b.href = APP[kind]; b.target = /^https?:/.test(APP[kind]) ? "_blank" : ""; b.textContent = kind === "music" ? "點這裡打開 Music ›" : "點這裡打開 Podcast ›";
+  b.classList.add("on"); clearTimeout(b._t); b._t = setTimeout(() => b.classList.remove("on"), 6000);
+  b.onclick = () => b.classList.remove("on");
+}
+function onHeard(text) {
+  const now = performance.now(); if (now - lastCmd < 2500) return;
+  if (!vEl.paused) return; // don't react to her own voice
+  const wake = WAKE.test(text);
+  if (CMD_POD.test(text)) { lastCmd = now; if (!awake) setPower(true); openApp("podcast"); return; }
+  if (CMD_MUSIC.test(text)) { lastCmd = now; if (!awake) setPower(true); openApp("music"); return; }
+  if (wake) { lastCmd = now; if (!awake) setPower(true); else { LG.poke && LG.poke(); say(pick(LINES.heard), { force: true }); } }
+}
+function startRec() {
+  rec = new SR(); rec.lang = "zh-TW"; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 3;
+  rec.onresult = e => {
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i]; let t = ""; for (let k = 0; k < r.length; k++) t += r[k].transcript + " ";
+      if (r.isFinal || /拉比|podcast|音樂/i.test(t)) onHeard(t);
+    }
+  };
+  rec.onerror = e => { if (e.error === "not-allowed" || e.error === "service-not-allowed") { micOn = false; $("mic").setAttribute("aria-pressed", false); LG.toast && LG.toast("麥克風沒有權限" + (isIOS && navigator.standalone ? "（主畫面 App 可能不支援，請用 Safari 開）" : "")); } };
+  rec.onend = () => { if (micOn) setTimeout(() => { try { rec.start(); } catch (e) {} }, 300); }; // keep listening
+  try { rec.start(); } catch (e) {}
+}
+function toggleMic() {
+  if (!SR) { LG.toast && LG.toast("這個瀏覽器不支援語音辨識" + (isIOS ? "（請用 Safari 開）" : "，請用 Chrome")); return; }
+  initAudio(); if (ac.state === "suspended") ac.resume(); // unlock audio in this tap so "Hey 拉比" can wake her later
+  micOn = !micOn; $("mic").setAttribute("aria-pressed", micOn);
+  if (micOn) { startRec(); LG.toast && LG.toast("語音控制開啟：說「Hey 拉比」"); }
+  else { try { rec && rec.abort(); } catch (e) {} rec = null; LG.toast && LG.toast("語音控制關閉"); }
+}
+LG.onHeard = onHeard; // for testing
 
 // ---------------- speech + subtitles ----------------
 let subT, voice = null;
@@ -93,7 +154,7 @@ function initAudio() {
 function ramp(param, v, t) { const n = ac.currentTime; param.cancelScheduledValues(n); param.setValueAtTime(param.value, n); param.linearRampToValueAtTime(v, n + t); }
 function bgmTarget() { return playing ? vol * (duckOn ? 0.55 : 1) * modeGain : 0; }
 function applyBgm(t = 0.8) { if (ac) ramp(bgmBus.gain, bgmTarget() * 0.9, t); }
-function setVolume(v) { vol = v; $("vol").value = v; applyBgm(0.3); }
+function setVolume(v) { vol = v; $("vol").value = v; if (awake && !playing) playing = true; applyBgm(0.3); }
 function duck(on) { duckOn = on; applyBgm(0.5); }
 
 // lazy progression in F: Fmaj9 - Em7 - Dm9 - Cmaj7/G  (70 bpm, 2 bars each)

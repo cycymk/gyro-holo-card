@@ -28,5 +28,9 @@ window.LG_VOICE = {
 "……謝謝。外殼都生鏽了還這樣說。": "voice/v26.mp3",
 "嗯？再說一次嘛。": "voice/v27.mp3",
 "我在聽。": "voice/v28.mp3",
-"這個我還不懂，但我記下來了。": "voice/v29.mp3"
+"這個我還不懂，但我記下來了。": "voice/v29.mp3",
+"嗯？我在。": "voice/v30.mp3",
+"叫我嗎？我醒著喔。": "voice/v31.mp3",
+"好，幫你打開 Music。": "voice/v32.mp3",
+"好，幫你打開 Podcast。": "voice/v33.mp3"
 };
