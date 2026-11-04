@@ -15,6 +15,10 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;transform-ori
 body.nobg .bgimg{opacity:0}
 .backdrop{position:fixed;inset:-60px;pointer-events:none;background:radial-gradient(60% 45% at 50% 42%,#2c2536 0%,rgba(23,20,28,0) 70%),radial-gradient(38% 6% at 50% 84%,rgba(0,0,0,.55) 0%,rgba(0,0,0,0) 100%);will-change:transform}
 body.immersive .ui,body.immersive .top{display:none}
+body.immersive .toast{top:calc(14px + env(safe-area-inset-top))}
+canvas{-webkit-mask-image:linear-gradient(to top,transparent 0,#000 7%);mask-image:linear-gradient(to top,transparent 0,#000 7%)}
+.camlabel{position:fixed;right:max(14px,env(safe-area-inset-right));top:calc(34px + env(safe-area-inset-top));font-size:11px;color:var(--fg);text-shadow:0 1px 3px rgba(0,0,0,.7);pointer-events:none;opacity:.85}
+body.immersive .camlabel{top:calc(64px + env(safe-area-inset-top))}
 .exitfs{position:fixed;top:calc(12px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));z-index:5;width:40px;height:40px;border-radius:50%;padding:0;background:var(--panel);font-size:18px;line-height:1;display:none}
 body.immersive .exitfs{display:block}
 .ui{position:fixed;left:0;right:0;bottom:0;padding:10px max(14px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:8px;pointer-events:none}
@@ -25,7 +29,7 @@ button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);co
 label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mute);white-space:nowrap;flex:1;min-width:120px}
 label input{flex:1;accent-color:var(--accent)}
 .top{position:fixed;top:calc(10px + env(safe-area-inset-top));left:14px;right:14px;display:flex;justify-content:space-between;font-size:12px;color:var(--fg);text-shadow:0 1px 3px rgba(0,0,0,.7);pointer-events:none}
-.toast{position:fixed;left:50%;top:18%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);padding:6px 14px;border-radius:999px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast{position:fixed;left:max(14px,env(safe-area-inset-left));top:calc(34px + env(safe-area-inset-top));background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:999px;font-size:11px;z-index:6;opacity:0;transition:opacity .25s;pointer-events:none}
 .toast.on{opacity:1}
 .ripple{position:fixed;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;border:2px solid var(--cyan);pointer-events:none;animation:rip .6s ease-out forwards;z-index:4}
 .ripple.hit{border-color:var(--accent);box-shadow:0 0 18px var(--accent)}
@@ -42,11 +46,13 @@ label input{flex:1;accent-color:var(--accent)}
 <button class="exitfs" id="exitfs" aria-label="離開全螢幕">✕</button>
 <div class="top"><span>Lobby Girl · Spine 4.2</span><span id="status">拖曳看角度，點部位互動</span></div>
 <div class="toast" id="toast"></div>
+<div class="camlabel" id="camlabel">鏡頭 1／5 · 全身</div>
 <div class="ui">
   <div class="bar">
     <button class="primary" id="gyroBtn">啟用陀螺儀</button>
     <button id="recal">歸零</button>
     <button id="fs">全螢幕</button>
+    <button id="camBtn">鏡頭 ▸</button>
     <button id="st00" aria-pressed="true">00 Idle</button>
     <button id="st10" aria-pressed="false">10 Idle</button>
     <button id="bgBtn" aria-pressed="true">背景</button>
@@ -68,6 +74,7 @@ const gl = ctx.gl;
 const am = new spine.AssetManager(ctx);
 am.loadBinary("girl.skel"); am.loadTextureAtlas("girl.atlas");
 
+let DROPS = [], nextDrop = 2;
 let skeleton, state, sd, renderer, shapes, faceCtrl, lookEntry, immersive = false;
 const tilt = { x: 0, y: 0 }, gyro = { x: 0, y: 0 }, drag = { x: 0, y: 0 };
 let gyroBase = null, gyroRaw = null, gyroOn = false, idleState = "00_Idle_ani", busy = false, showParts = false;
@@ -96,6 +103,8 @@ function init() {
   scheduleBlink();
 
   faceCtrl = skeleton.findBone("Face_CTRL_1");
+  DROPS = [["arm_oil_D1", "B_Arm_r_oil_D", 110], ["arm_oil_D2", "B_Arm_r_oil_D2", 90], ["leg_oil_D1", "B_thigh_R_oil", 120], ["leg_oil_D2", "B_thigh_R_oil_drop", 150]]
+    .map(([b, sl, dist]) => ({ bone: skeleton.findBone(b), slot: skeleton.findSlot(sl), dist, t: -1 }));
 
   renderer = new spine.SceneRenderer(canvas, ctx, true);
   shapes = renderer.shapes;
@@ -138,10 +147,28 @@ function onPart(g, wx, wy) {
 
 // ---- view transform ----
 let view = { s: 1, ox: 0, oy: 0 };
+// camera presets in skeleton units: center x/y and visible height (P1..P5 follow the Unity camera clips)
+const FLOOR = -320; // bottom of the seat cushion: never show below it
+const SHOTS = [
+  { name: "全身", x: -40, y: 640, h: 1960 },
+  { name: "臉部", x: -175, y: 1230, h: 640 },
+  { name: "上身", x: -150, y: 830, h: 1050 },
+  { name: "腿部", x: 60, y: 300, h: 1150 },
+  { name: "膝側", x: 260, y: 520, h: 900 },
+];
+let shotIdx = 0, camNow = { ...SHOTS[0] };
+function setShot(i) { shotIdx = (i + SHOTS.length) % SHOTS.length; $("camlabel").textContent = `鏡頭 ${shotIdx + 1}／${SHOTS.length} · ${SHOTS[shotIdx].name}`; }
+$("camBtn").onclick = () => setShot(shotIdx + 1);
 function fit() {
-  const W = canvas.width, H = canvas.height, bw = sd.width, bh = sd.height;
-  const s = immersive ? Math.min(W / (bw * 1.05), (H * 0.95) / bh) : Math.min(W / (bw * 1.15), (H * 0.8) / bh);
-  view = { s, ox: W / 2 - (sd.x + bw / 2) * s, oy: H * (immersive ? 0.5 : 0.58) - (sd.y + bh / 2) * s };
+  const W = canvas.width, H = canvas.height, t = SHOTS[shotIdx];
+  for (const k of ["x", "y", "h"]) camNow[k] += (t[k] - camNow[k]) * 0.08;
+  // fit the shot height, but keep at least the shot width (1250 for the full body) on narrow screens
+  let s = H / camNow.h; const minW = camNow.h * 0.62; if (W / s < minW) s = W / minW;
+  // keep the controls from covering the shot: use the space above them
+  const pad = immersive ? 0 : (document.querySelector(".ui").offsetHeight - 10) * (W / canvas.clientWidth), Hv = H - pad;
+  if (Hv / s < camNow.h * 0.9) s = Hv / (camNow.h * 0.9);
+  let cy = camNow.y; const halfH = Hv / 2 / s; if (cy - halfH < FLOOR) cy = FLOOR + halfH;
+  view = { s, ox: W / 2 - camNow.x * s, oy: pad + Hv / 2 - cy * s };
 }
 function screenToWorld(px, py) { // px,py in CSS px
   const d = canvas.width / canvas.clientWidth, x = px * d, y = (canvas.clientHeight - py) * d;
@@ -171,7 +198,7 @@ function hitSlot(wx, wy) {
 }
 
 // ---- input ----
-let down = null, last = null;
+let down = null, last = null, lastEmptyTap = 0;
 canvas.addEventListener("pointerdown", e => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; last = { ...down }; canvas.setPointerCapture(e.pointerId); });
 canvas.addEventListener("pointermove", e => {
   if (!down) return;
@@ -197,6 +224,7 @@ canvas.addEventListener("pointerup", e => {
     const g = slot ? groupOf(slot.data.name) : null;
     feedback(e.clientX, e.clientY, !!(g && g.key !== "other"));
     if (g) onPart(g, w.x, w.y);
+    else { const now = performance.now(); if (now - lastEmptyTap < 350) setShot(shotIdx + 1); lastEmptyTap = now; }
   }
   down = null;
 });
@@ -260,6 +288,24 @@ function loop(now) {
   if (faceCtrl && faceCtrl.parent) {
     const p = faceCtrl.parent, a = new spine.Vector2(faceCtrl.worldX, faceCtrl.worldY), b = new spine.Vector2(faceCtrl.worldX + fx * 150 * fk, faceCtrl.worldY - fy * 90 * fk);
     p.worldToLocal(a); p.worldToLocal(b); faceCtrl.x += b.x - a.x; faceCtrl.y += b.y - a.y;
+  }
+  // liquid drops: every few seconds one streak runs down, fades, then grows back
+  nextDrop -= dt;
+  if (nextDrop <= 0) { const idle = DROPS.filter(d => d.t < 0); if (idle.length) idle[Math.random() * idle.length | 0].t = 0; nextDrop = 2.5 + Math.random() * 3.5; }
+  for (const d of DROPS) {
+    if (!d.bone || !d.slot) continue;
+    let off = 0, alpha = 1;
+    if (d.t >= 0) {
+      d.t += dt; const T = 2.6;
+      const k = Math.min(1, d.t / 1.8); off = d.dist * (k * k * (3 - 2 * k));          // run down
+      if (d.t > 1.8) alpha = Math.max(0, 1 - (d.t - 1.8) / 0.5);                     // fade at the end
+      if (d.t > T) { d.t = -1; d.grow = 0; }
+    } else if (d.grow !== undefined && d.grow < 1) { d.grow = Math.min(1, d.grow + dt / 0.8); alpha = d.grow; }
+    const p = d.bone.parent;
+    const w0 = new spine.Vector2(p.worldX, p.worldY), w1 = new spine.Vector2(p.worldX, p.worldY - off);
+    p.worldToLocal(w0); p.worldToLocal(w1);
+    d.bone.x = d.bone.data.x + (w1.x - w0.x); d.bone.y = d.bone.data.y + (w1.y - w0.y);
+    d.slot.color.a = alpha;
   }
   skeleton.update(dt);
   skeleton.updateWorldTransform(spine.Physics.update);
