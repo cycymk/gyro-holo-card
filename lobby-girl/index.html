@@ -2,35 +2,65 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Lobby Girl Gyro</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
-:root{--bg:#17141c;--panel:rgba(29,25,36,.86);--line:#3a3245;--fg:#f3eef8;--mute:#a79cb6;--accent:#ff8a5c;--cyan:#56d6e6;color-scheme:dark}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC",sans-serif;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
-canvas{position:fixed;inset:0;width:100%;height:100%;display:block;transform-origin:50% 55%;will-change:transform}
-.bgimg{position:fixed;inset:-70px;pointer-events:none;background:#c97a0c url(bg.jpg) center/cover no-repeat;will-change:transform;transition:opacity .3s}
+:root{--bg:#17141c;--panel:rgba(24,20,30,.82);--line:rgba(255,255,255,.14);--fg:#f3eef8;--mute:#b5abc3;--accent:#ff8a5c;--cyan:#56d6e6;color-scheme:dark}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC",sans-serif;overflow:hidden;overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+/* stage: everything that moves stays inside a clipped full-screen box, so nothing can widen the page */
+.stage{position:fixed;inset:0;overflow:hidden}
+.bgimg{position:absolute;inset:-8%;background:#c97a0c url(bg.jpg) center/cover no-repeat;will-change:transform;transition:opacity .3s}
 body.nobg .bgimg{opacity:0}
-.backdrop{position:fixed;inset:-60px;pointer-events:none;background:radial-gradient(60% 45% at 50% 42%,#2c2536 0%,rgba(23,20,28,0) 70%),radial-gradient(38% 6% at 50% 84%,rgba(0,0,0,.55) 0%,rgba(0,0,0,0) 100%);will-change:transform}
-body.immersive .ui,body.immersive .top{display:none}
-body.immersive .toast{top:calc(14px + env(safe-area-inset-top))}
-canvas{-webkit-mask-image:linear-gradient(to top,transparent 0,#000 7%);mask-image:linear-gradient(to top,transparent 0,#000 7%)}
-.camlabel{position:fixed;right:max(14px,env(safe-area-inset-right));top:calc(34px + env(safe-area-inset-top));font-size:11px;color:var(--fg);text-shadow:0 1px 3px rgba(0,0,0,.7);pointer-events:none;opacity:.85}
-body.immersive .camlabel{top:calc(64px + env(safe-area-inset-top))}
-.exitfs{position:fixed;top:calc(12px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));z-index:5;width:40px;height:40px;border-radius:50%;padding:0;background:var(--panel);font-size:18px;line-height:1;display:none}
-body.immersive .exitfs{display:block}
-.ui{position:fixed;left:0;right:0;bottom:0;padding:10px max(14px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:8px;pointer-events:none}
-.bar{pointer-events:auto;background:var(--panel);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:12px;padding:8px 10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-button{font:inherit;font-size:13px;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+.backdrop{position:absolute;inset:-8%;background:radial-gradient(60% 45% at 50% 42%,rgba(44,37,54,.7) 0%,rgba(23,20,28,0) 70%);will-change:transform}
+/* canvas is 30% larger than the screen so the 3D turn never shows its edge */
+canvas{position:absolute;left:-15%;top:-15%;width:130%;height:130%;display:block;will-change:transform}
+.dim{position:absolute;inset:0;background:#05040a;opacity:.62;pointer-events:none;transition:opacity 1.6s ease}
+body.awake .dim{opacity:0}
+button{font:inherit;font-size:13px;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:999px;padding:7px 12px;cursor:pointer}
 button.primary{background:var(--cyan);border-color:var(--cyan);color:#082429;font-weight:700}
 button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#2a0f04}
-label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mute);white-space:nowrap;flex:1;min-width:120px}
-label input{flex:1;accent-color:var(--accent)}
-.top{position:fixed;top:calc(10px + env(safe-area-inset-top));left:14px;right:14px;display:flex;justify-content:space-between;font-size:12px;color:var(--fg);text-shadow:0 1px 3px rgba(0,0,0,.7);pointer-events:none}
-.toast{position:fixed;left:max(14px,env(safe-area-inset-left));top:calc(34px + env(safe-area-inset-top));background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:999px;font-size:11px;z-index:6;opacity:0;transition:opacity .25s;pointer-events:none}
+/* minimal layer: always present */
+.pill{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:7px;font-size:12px;background:rgba(10,8,14,.45);border:1px solid var(--line);border-radius:999px;padding:5px 12px;z-index:5;transition:opacity .4s}
+.pill i,.mode i{width:7px;height:7px;border-radius:50%;background:var(--mute);flex:none}
+body:not(.awake) .pill i,body:not(.awake) .mode i{animation:breathe 3.2s ease-in-out infinite}
+body.awake .pill i,body.awake .mode i{background:#6be38a}
+body.booting .pill i,body.booting .mode i{background:#ffd166;animation:breathe .6s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:.25}50%{opacity:1}}
+body:not(.minimal) .pill{opacity:0;pointer-events:none}
+.toast{position:fixed;left:max(14px,env(safe-area-inset-left));top:calc(12px + env(safe-area-inset-top));background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:999px;font-size:11px;z-index:6;opacity:0;transition:opacity .25s;pointer-events:none}
 .toast.on{opacity:1}
+.sub{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--uih,60px) + 14px + env(safe-area-inset-bottom));max-width:min(86vw,520px);background:rgba(10,8,14,.66);color:#fff;font-size:14px;line-height:1.5;padding:7px 14px;border-radius:10px;opacity:0;transition:opacity .3s,bottom .3s;pointer-events:none;z-index:6;text-align:center}
+.sub.on{opacity:1}
+/* interaction dock */
+.ui{position:fixed;left:0;right:0;bottom:0;padding:10px max(12px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:8px;z-index:5;transition:opacity .4s,transform .4s;box-sizing:border-box}
+body.minimal .ui{opacity:0;transform:translateY(16px);pointer-events:none}
+.dock{background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:14px;padding:8px;display:flex;gap:8px;align-items:center;min-width:0}
+.pwr{width:40px;height:40px;border-radius:50%;padding:0;font-size:17px;flex:none}
+body.awake .pwr{background:var(--cyan);border-color:var(--cyan);color:#082429}
+.mode{font-size:12px;display:flex;align-items:center;gap:6px;flex:none;white-space:nowrap}
+.vol{display:flex;align-items:center;gap:6px;flex:1;min-width:0}
+.vol input{flex:1;min-width:0;accent-color:var(--cyan)}
+body:not(.awake) .vol{visibility:hidden}
+.icon{width:40px;height:40px;border-radius:50%;padding:0;flex:none;font-size:16px}
+.chat{display:none;flex-direction:column;gap:8px}
+body.talk .chat{display:flex}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{font-size:12px;padding:5px 10px}
+.chat form{display:flex;gap:6px}
+.chat input{flex:1;min-width:0;font:inherit;font-size:16px;color:var(--fg);background:rgba(255,255,255,.07);border:1px solid var(--line);border-radius:999px;padding:7px 12px}
+/* settings sheet */
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:8;background:rgba(20,17,26,.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line);border-radius:18px 18px 0 0;padding:14px max(16px,env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));transform:translateY(105%);transition:transform .35s ease;max-height:75vh;overflow:auto;box-sizing:border-box;touch-action:pan-y}
+body.settings .sheet{transform:none}
+.sheet h2{font-size:15px;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center}
+.sheet h3{font-size:11px;letter-spacing:.08em;color:var(--mute);margin:14px 0 8px;font-weight:600}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.sheet label{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--fg);margin:6px 0}
+.sheet label span{width:3em;flex:none;color:var(--mute)}
+.sheet label input{flex:1;min-width:0;accent-color:var(--accent)}
+.hint{font-size:12px;color:var(--mute);line-height:1.6;margin:4px 0 0}
 .ripple{position:fixed;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;border:2px solid var(--cyan);pointer-events:none;animation:rip .6s ease-out forwards;z-index:4}
 .ripple.hit{border-color:var(--accent);box-shadow:0 0 18px var(--accent)}
 .spark{position:fixed;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:var(--accent);pointer-events:none;z-index:4;animation:spark .55s ease-out forwards}
@@ -39,32 +69,47 @@ label input{flex:1;accent-color:var(--accent)}
 @media (prefers-reduced-motion:reduce){.ripple,.spark{animation-duration:.01s}}
 </style>
 </head>
-<body>
-<div class="bgimg" id="bgimg"></div>
-<div class="backdrop" id="backdrop"></div>
-<canvas id="c"></canvas>
-<button class="exitfs" id="exitfs" aria-label="離開全螢幕">✕</button>
-<div class="top"><span>Lobby Girl · Spine 4.2</span><span id="status">拖曳看角度，點部位互動</span></div>
+<body class="minimal">
+<div class="stage" id="stage">
+  <div class="bgimg" id="bgimg"></div>
+  <div class="backdrop" id="backdrop"></div>
+  <canvas id="c"></canvas>
+  <div class="dim"></div>
+</div>
 <div class="toast" id="toast"></div>
-<div class="camlabel" id="camlabel">鏡頭 1／5 · 全身</div>
-<div class="ui">
-  <div class="bar">
-    <button class="primary" id="gyroBtn">啟用陀螺儀</button>
-    <button id="recal">歸零</button>
-    <button id="fs">全螢幕</button>
-    <button id="camBtn">鏡頭 ▸</button>
-    <button id="st00" aria-pressed="true">00 Idle</button>
-    <button id="st10" aria-pressed="false">10 Idle</button>
-    <button id="bgBtn" aria-pressed="true">背景</button>
-    <button id="dbg" aria-pressed="false">部位</button>
+<div class="sub" id="sub"></div>
+<button class="pill" id="pill"><i></i><span id="modeTxt2">休眠待機 · 點一下喚出介面</span></button>
+<div class="ui" id="ui">
+  <div class="dock chat" id="chat">
+    <div class="chips"><button data-q="妳在做什麼？">妳在做什麼？</button><button data-q="想聽歌">想聽歌</button><button data-q="妳是誰？">妳是誰？</button><button data-q="晚安">晚安</button></div>
+    <form id="chatForm"><input id="chatIn" placeholder="跟她說話…" autocomplete="off" enterkeyhint="send"><button class="primary" type="submit">送出</button></form>
   </div>
-  <div class="bar">
-    <label>視角 <input id="depth" type="range" min="0" max="2" step="0.05" value="1"></label>
-    <label>臉部 <input id="face" type="range" min="0" max="2" step="0.05" value="0.6"></label>
-    <label>擺動 <input id="phys" type="range" min="0" max="2" step="0.05" value="0.6"></label>
+  <div class="dock" id="dock">
+    <button class="pwr" id="pwr" aria-label="開機或休眠">⏻</button>
+    <div class="mode"><i></i><span id="modeTxt">休眠待機</span></div>
+    <label class="vol" aria-label="音量">🔈<input id="vol" type="range" min="0" max="1" step="0.01" value="0.6"></label>
+    <button class="icon" id="sense" aria-pressed="false" aria-label="鏡頭感應">◉</button>
+    <button class="icon" id="setBtn" aria-label="設定">⚙</button>
   </div>
 </div>
+<div class="sheet" id="sheet" role="dialog" aria-label="設定">
+  <h2>設定 <button id="setClose">完成</button></h2>
+  <h3>操作</h3>
+  <p class="hint">單指拖曳：轉視角　雙指捏合：縮放　雙指拖曳：移動鏡頭　點兩下：放大／回全身　點角色部位：互動</p>
+  <h3>感測</h3>
+  <div class="row"><button class="primary" id="gyroBtn">啟用陀螺儀</button><button id="recal">陀螺儀歸零</button><button id="camReset">鏡頭回全身</button></div>
+  <h3>畫面</h3>
+  <div class="row"><button id="fs">全螢幕</button><button id="bgBtn" aria-pressed="true">背景</button><button id="dbg" aria-pressed="false">顯示部位</button><button id="st00" aria-pressed="true">00 Idle</button><button id="st10" aria-pressed="false">10 Idle</button></div>
+  <h3>強度</h3>
+  <label><span>視角</span><input id="depth" type="range" min="0" max="2" step="0.05" value="1"></label>
+  <label><span>臉部</span><input id="face" type="range" min="0" max="2" step="0.05" value="0.6"></label>
+  <label><span>擺動</span><input id="phys" type="range" min="0" max="2" step="0.05" value="0.6"></label>
+  <h3>聲音</h3>
+  <div class="row"><button id="voiceTgl" aria-pressed="true">角色語音</button><button id="autoMin" aria-pressed="true">閒置自動精簡</button></div>
+  <p class="hint" id="status">陀螺儀未啟用</p>
+</div>
 <script src="spine-webgl.min.js"></script>
+<script src="voice.js"></script>
 <script src="interact.js"></script>
 <script>
 (() => {
@@ -77,7 +122,7 @@ const am = new spine.AssetManager(ctx);
 am.loadBinary("girl.skel"); am.loadTextureAtlas("girl.atlas");
 
 let DROPS = [], nextDrop = 2;
-let skeleton, state, sd, renderer, shapes, faceCtrl, lookEntry, immersive = false;
+let skeleton, state, sd, renderer, shapes, faceCtrl, lookEntry;
 const tilt = { x: 0, y: 0 }, gyro = { x: 0, y: 0 }, drag = { x: 0, y: 0 };
 let gyroBase = null, gyroRaw = null, gyroOn = false, idleState = "00_Idle_ani", busy = false, showParts = false;
 
@@ -110,13 +155,14 @@ function init() {
 
   renderer = new spine.SceneRenderer(canvas, ctx, true);
   shapes = renderer.shapes;
-  resize(); addEventListener("resize", resize);
+  resize(); addEventListener("resize", () => { resize(); clampCam(camT); }); clampCam(camT); Object.assign(cam, camT);
   requestAnimationFrame(loop);
 }
 
+let DPR = 1;
 function resize() {
-  const d = Math.min(devicePixelRatio || 1, 2);
-  canvas.width = Math.round(innerWidth * d); canvas.height = Math.round(innerHeight * d);
+  DPR = Math.min(devicePixelRatio || 1, 1.75);
+  canvas.width = Math.round(canvas.clientWidth * DPR); canvas.height = Math.round(canvas.clientHeight * DPR);
   gl.viewport(0, 0, canvas.width, canvas.height);
 }
 
@@ -136,6 +182,24 @@ $("st00").onclick = () => setIdle("00_Idle_ani");
 $("st10").onclick = () => setIdle("10_Idle_ani");
 $("dbg").onclick = () => { showParts = !showParts; $("dbg").setAttribute("aria-pressed", showParts); };
 
+// ---- UI layers: minimal (just her) / dock / settings; idle → minimal ----
+let idleT;
+LG.minimalLock = false; // interact.js sets this in listen mode
+function setMinimal(on) { document.body.classList.toggle("minimal", on); updateSubPos(); }
+function updateSubPos() { document.body.style.setProperty("--uih", (document.body.classList.contains("minimal") ? 40 : $("ui").offsetHeight - 10) + "px"); }
+LG.poke = () => {
+  if (LG.minimalLock) return;
+  setMinimal(false); clearTimeout(idleT);
+  if ($("autoMin").getAttribute("aria-pressed") === "true") idleT = setTimeout(() => { if (!document.body.classList.contains("settings") && !document.body.classList.contains("talk")) setMinimal(true); }, 8000);
+};
+LG.setMinimal = setMinimal;
+document.addEventListener("pointerdown", e => { if (!e.target.closest("canvas")) LG.poke(); }, true);
+$("pill").onclick = () => LG.poke();
+$("setBtn").onclick = () => { document.body.classList.add("settings"); clearTimeout(idleT); };
+$("setClose").onclick = () => { document.body.classList.remove("settings"); LG.poke(); };
+$("autoMin").onclick = () => { const on = $("autoMin").getAttribute("aria-pressed") !== "true"; $("autoMin").setAttribute("aria-pressed", on); LG.poke(); };
+new ResizeObserver(updateSubPos).observe($("ui"));
+
 let toastT;
 function toast(t) { toastEl.textContent = t; toastEl.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove("on"), 900); }
 
@@ -148,36 +212,29 @@ function onPart(g, wx, wy) {
   else if (g.key === "body") { playActive(); skeleton.physicsTranslate(0, -30 * k); toast("身體：20_Active"); }
 }
 
-// ---- view transform ----
-let view = { s: 1, ox: 0, oy: 0 };
-// camera presets in skeleton units: center x/y and visible height (P1..P5 follow the Unity camera clips)
-const FLOOR = -320; // bottom of the seat cushion: never show below it
-const SHOTS = [
-  { name: "全身", x: -40, y: 640, h: 1960 },
-  { name: "臉部", x: -175, y: 1230, h: 640 },
-  { name: "上身", x: -150, y: 830, h: 1050 },
-  { name: "腿部", x: 60, y: 300, h: 1150 },
-  { name: "膝側", x: 260, y: 520, h: 900 },
-];
-let shotIdx = 0, camNow = { ...SHOTS[0] };
-function setShot(i) { shotIdx = (i + SHOTS.length) % SHOTS.length; $("camlabel").textContent = `鏡頭 ${shotIdx + 1}／${SHOTS.length} · ${SHOTS[shotIdx].name}`; }
-$("camBtn").onclick = () => setShot(shotIdx + 1);
-function fit() {
-  const W = canvas.width, H = canvas.height, t = SHOTS[shotIdx];
-  for (const k of ["x", "y", "h"]) camNow[k] += (t[k] - camNow[k]) * 0.08;
-  // fit the shot height, but keep at least the shot width (1250 for the full body) on narrow screens
-  let s = H / camNow.h; const minW = camNow.h * 0.62; if (W / s < minW) s = W / minW;
-  // keep the controls from covering the shot: use the space above them
-  const pad = immersive ? 0 : (document.querySelector(".ui").offsetHeight - 10) * (W / canvas.clientWidth), Hv = H - pad;
-  if (Hv / s < camNow.h * 0.9) s = Hv / (camNow.h * 0.9);
-  let cy = camNow.y; const halfH = Hv / 2 / s; if (cy - halfH < FLOOR) cy = FLOOR + halfH;
-  view = { s, ox: W / 2 - camNow.x * s, oy: pad + Hv / 2 - cy * s };
+// ---- camera: pinch to zoom, two-finger pan, double tap toggles ----
+// B = the whole character; the view never goes below the seat cushion (FLOOR) and zoom 1 always shows all of her
+const B = { x0: -650, x1: 550, y0: -320, y1: 1590 };
+const cam = { z: 1, cx: (B.x0 + B.x1) / 2, cy: (B.y0 + B.y1) / 2 }, camT = { ...cam };
+let viewS = 1;
+function baseScale() { const W = innerWidth * DPR, H = innerHeight * DPR; return Math.min(W / (B.x1 - B.x0), H / (B.y1 - B.y0)); }
+function clampCam(c) {
+  c.z = Math.max(1, Math.min(4, c.z));
+  const s = baseScale() * c.z, hw = innerWidth * DPR / 2 / s, hh = innerHeight * DPR / 2 / s;
+  c.cx = hw * 2 >= B.x1 - B.x0 ? (B.x0 + B.x1) / 2 : Math.max(B.x0 + hw, Math.min(B.x1 - hw, c.cx));
+  c.cy = hh * 2 >= B.y1 - B.y0 ? B.y0 + hh : Math.max(B.y0 + hh, Math.min(B.y1 - hh, c.cy));
+  return c;
 }
-function screenToWorld(px, py) { // px,py in CSS px
-  const d = canvas.width / canvas.clientWidth, x = px * d, y = (canvas.clientHeight - py) * d;
-  const cam = renderer.camera; const W = canvas.width, H = canvas.height;
-  return { x: cam.position.x + (x - W / 2) * cam.zoom, y: cam.position.y + (y - H / 2) * cam.zoom };
+function zoomAt(px, py, z) { // keep the world point under (px,py) fixed while zooming
+  const w = screenToWorld(px, py, camT); camT.z = z; const s = baseScale() * camT.z;
+  camT.cx = w.x - (px - innerWidth / 2) * DPR / s; camT.cy = w.y + (py - innerHeight / 2) * DPR / s; clampCam(camT);
 }
+function resetCam() { camT.z = 1; clampCam(camT); }
+function screenToWorld(px, py, c = cam) {
+  const s = baseScale() * c.z;
+  return { x: c.cx + (px - innerWidth / 2) * DPR / s, y: c.cy - (py - innerHeight / 2) * DPR / s };
+}
+$("camReset").onclick = resetCam;
 
 // ---- hit test ----
 const verts = new Float32Array(20000);
@@ -201,10 +258,25 @@ function hitSlot(wx, wy) {
 }
 
 // ---- input ----
-let down = null, last = null, lastEmptyTap = 0;
-canvas.addEventListener("pointerdown", e => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; last = { ...down }; canvas.setPointerCapture(e.pointerId); });
+const ptrs = new Map();
+let down = null, last = null, multi = false, pinch = null, lastTap = { t: 0, x: 0, y: 0 };
+canvas.addEventListener("pointerdown", e => {
+  canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  LG.poke && LG.poke();
+  if (ptrs.size === 1) { down = { x: e.clientX, y: e.clientY, t: performance.now() }; last = { ...down }; multi = false; }
+  if (ptrs.size === 2) { multi = true; pinch = pinchInfo(); }
+});
+function pinchInfo() { const [a, b] = [...ptrs.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }; }
 canvas.addEventListener("pointermove", e => {
-  if (!down) return;
+  if (!ptrs.has(e.pointerId)) return;
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ptrs.size >= 2 && pinch) {
+    const p = pinchInfo(), s = baseScale() * camT.z;
+    zoomAt(p.mx, p.my, camT.z * p.d / Math.max(1, pinch.d));
+    camT.cx -= (p.mx - pinch.mx) * DPR / s; camT.cy += (p.my - pinch.my) * DPR / s; clampCam(camT);
+    pinch = p; return;
+  }
+  if (!down || multi) return;
   const dx = (e.clientX - last.x) / innerWidth, dy = (e.clientY - last.y) / innerHeight; last = { x: e.clientX, y: e.clientY };
   drag.x = Math.max(-1.6, Math.min(1.6, drag.x + dx * 3)); drag.y = Math.max(-1.6, Math.min(1.6, drag.y + dy * 3));
 });
@@ -219,19 +291,29 @@ function feedback(x, y, hit) {
     try { navigator.vibrate && navigator.vibrate(12); } catch (e) {}
   }
 }
-canvas.addEventListener("pointerup", e => {
-  if (!down) return;
-  const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y), dt = performance.now() - down.t;
-  if (moved < 10 && dt < 400) {
-    const w = screenToWorld(e.clientX, e.clientY), slot = hitSlot(w.x, w.y);
-    const g = slot ? groupOf(slot.data.name) : null;
-    feedback(e.clientX, e.clientY, !!(g && g.key !== "other"));
-    if (g) onPart(g, w.x, w.y);
-    else { const now = performance.now(); if (now - lastEmptyTap < 350) setShot(shotIdx + 1); lastEmptyTap = now; }
+function endPtr(e) {
+  ptrs.delete(e.pointerId);
+  if (ptrs.size < 2) pinch = null;
+  if (ptrs.size > 0) return;
+  if (down && !multi && e.type === "pointerup") {
+    const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y), dt = performance.now() - down.t;
+    if (moved < 10 && dt < 400) {
+      const now = performance.now();
+      if (now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) { // double tap
+        if (camT.z > 1.2) resetCam(); else zoomAt(e.clientX, e.clientY, 2.4);
+        lastTap.t = 0;
+      } else {
+        lastTap = { t: now, x: e.clientX, y: e.clientY };
+        const w = screenToWorld(e.clientX, e.clientY), slot = hitSlot(w.x, w.y), g = slot ? groupOf(slot.data.name) : null;
+        feedback(e.clientX, e.clientY, !!(g && g.key !== "other"));
+        if (g) onPart(g, w.x, w.y);
+      }
+    }
   }
   down = null;
-});
-canvas.addEventListener("pointercancel", () => down = null);
+}
+canvas.addEventListener("pointerup", endPtr);
+canvas.addEventListener("pointercancel", endPtr);
 
 function onOrient(e) {
   if (e.gamma == null) return;
@@ -239,7 +321,7 @@ function onOrient(e) {
   if (!gyroBase) gyroBase = { ...gyroRaw };
   const c = v => Math.max(-1.4, Math.min(1.4, v));
   gyro.x = c((e.gamma - gyroBase.g) / 20); gyro.y = c((e.beta - gyroBase.b) / 20);
-  if (!gyroOn) { gyroOn = true; statusEl.textContent = "陀螺儀已啟用"; $("gyroBtn").hidden = true; }
+  if (!gyroOn) { gyroOn = true; statusEl.textContent = "陀螺儀已啟用"; $("gyroBtn").textContent = "陀螺儀已啟用"; }
 }
 $("gyroBtn").onclick = async () => {
   try {
@@ -253,18 +335,11 @@ $("gyroBtn").onclick = async () => {
 };
 const backdrop = $("backdrop"), bgimg = $("bgimg");
 $("bgBtn").onclick = () => { const on = document.body.classList.toggle("nobg"); $("bgBtn").setAttribute("aria-pressed", !on); };
-function setImmersive(on) {
-  immersive = on; document.body.classList.toggle("immersive", on);
+$("fs").onclick = () => {
   const el = document.documentElement;
-  try {
-    if (on && !document.fullscreenElement && !document.webkitFullscreenElement) (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el)?.catch?.(() => {});
-    if (!on && (document.fullscreenElement || document.webkitFullscreenElement)) (document.exitFullscreen || document.webkitExitFullscreen).call(document)?.catch?.(() => {});
-  } catch (e) {}
-  setTimeout(resize, 120);
-}
-$("fs").onclick = () => setImmersive(true);
-$("exitfs").onclick = () => setImmersive(false);
-document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && immersive) setImmersive(false); });
+  try { (el.requestFullscreen || el.webkitRequestFullscreen).call(el)?.catch?.(() => toast("這個瀏覽器不支援全螢幕，可加入主畫面")); }
+  catch (e) { toast("這個瀏覽器不支援全螢幕，可加入主畫面"); }
+};
 $("recal").onclick = () => { gyroBase = gyroRaw ? { ...gyroRaw } : null; drag.x = drag.y = 0; };
 
 // ---- loop ----
@@ -325,12 +400,11 @@ function loop(now) {
   backdrop.style.transform = `translate(${-tilt.x * 60 * vk}px, ${-tilt.y * 36 * vk}px)`;
   bgimg.style.transform = `translate(${-tilt.x * 45 * vk}px, ${-tilt.y * 28 * vk}px)`;
 
-  // camera
-  fit();
-  const cam = renderer.camera; cam.setViewport(canvas.width, canvas.height);
-  cam.zoom = 1 / view.s;
-  cam.position.x = (canvas.width / 2 - view.ox) / view.s;
-  cam.position.y = (canvas.height / 2 - view.oy) / view.s;
+  // camera (smoothly follows the gesture target)
+  for (const k of ["z", "cx", "cy"]) cam[k] += (camT[k] - cam[k]) * 0.22;
+  viewS = baseScale() * cam.z;
+  const rc = renderer.camera; rc.setViewport(canvas.width, canvas.height);
+  rc.zoom = 1 / viewS; rc.position.x = cam.cx; rc.position.y = cam.cy;
 
   gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
   renderer.begin();
@@ -354,7 +428,7 @@ function loop(now) {
   if (am.hasErrors()) { statusEl.textContent = "素材載入失敗：" + JSON.stringify(am.getErrors()); return; }
   if (!am.isLoadingComplete()) return setTimeout(wait, 50);
   init();
-  Object.assign(LG, { toast, setShot, playActive, physics: (x, y) => skeleton.physicsTranslate(x, y), tilt });
+  Object.assign(LG, { toast, resetCam, playActive, physics: (x, y) => skeleton.physicsTranslate(x, y), tilt });
   LG.ready && LG.ready();
 })();
 })();

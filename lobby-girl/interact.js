@@ -8,7 +8,7 @@ LG.rest = 1; // start asleep
 const LINES = {
   boot:   ["嗯……系統啟動了。你回來啦。", "早安……雖然我不知道現在幾點。"],
   idle:   ["今天的光線很溫柔，適合什麼都不做。", "我的記憶體裡，存著你上次來的時間。", "油又滴下來了。沒關係，那代表我還在運轉。", "音樂再大聲一點？我想多躺一下。"],
-  head:   ["頭髮亂了啦……", "嗯？摸頭可以，輕一點。"],
+  head:   ["哎，頭髮都亂了啦。", "嗯？摸頭可以，輕一點。"],
   arm:    ["這隻手臂的關節有點卡，你聽到了嗎？", "要我比個姿勢嗎？好吧。"],
   leg:    ["換個姿勢坐，比較不會生鏽。", "腳有點麻……"],
   body:   ["別一直盯著生鏽的地方看啦。", "嗯……這裡的外殼很久沒保養了。"],
@@ -17,7 +17,7 @@ const LINES = {
   listen: ["那我就安靜陪你聽歌。", "放著也好，我會一直在。"],
 };
 const REPLIES = [
-  [/做什麼|在幹嘛|幹嘛/, ["在發呆，順便等你。", "數灰塵，一顆、兩顆……"]],
+  [/做什麼|在幹嘛|幹嘛/, ["在發呆，順便等你呀。", "我在發呆，看灰塵飄來飄去。"]],
   [/歌|音樂|聽/, ["這首是我自己哼的，慵懶吧？我幫你調大一點。"], () => setVolume(Math.min(1, vol + 0.15))],
   [/晚安|睡|休息/, ["晚安。我也要進入待機了。"], () => setTimeout(() => setPower(false), 2200)],
   [/妳是誰|你是誰|名字/, ["編號 L-07，大廳的接待員。不過現在只負責陪你。"]],
@@ -26,71 +26,17 @@ const REPLIES = [
 ];
 const pick = a => a[Math.random() * a.length | 0];
 
-// ---------------- UI ----------------
-const css = document.createElement("style");
-css.textContent = `
-.dim{position:fixed;inset:0;background:#05040a;opacity:.62;pointer-events:none;transition:opacity 1.6s ease;z-index:2}
-body.awake .dim{opacity:0}
-.dock{pointer-events:auto;background:var(--panel);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:12px;padding:8px 10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.pwr{width:38px;height:38px;border-radius:50%;padding:0;font-size:17px;flex:none}
-body.awake .pwr{background:var(--cyan);border-color:var(--cyan);color:#082429}
-.mode{font-size:12px;display:flex;align-items:center;gap:6px;flex:none;white-space:nowrap}
-.ui{z-index:3}
-.top,.toast,.camlabel{z-index:4}
-.mode i{width:8px;height:8px;border-radius:50%;background:var(--mute);flex:none}
-body:not(.awake) .mode i{animation:breathe 3.2s ease-in-out infinite}
-body.awake .mode i{background:#6be38a}
-body.booting .mode i{background:#ffd166;animation:breathe .6s ease-in-out infinite}
-@keyframes breathe{0%,100%{opacity:.25}50%{opacity:1}}
-.vol{display:none;align-items:center;gap:6px;font-size:12px;color:var(--mute);flex:1 1 140px}
-body.awake .vol{display:flex}
-.vol input{flex:1;accent-color:var(--cyan)}
-.sense{font-size:12px}
-.sense[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#2a0f04}
-.sub{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--uih,180px) + 12px);max-width:min(88vw,520px);background:rgba(10,8,14,.72);color:#fff;font-size:14px;line-height:1.5;padding:8px 14px;border-radius:10px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:6;text-align:center}
-.sub.on{opacity:1}
-body.immersive .sub{bottom:calc(84px + env(safe-area-inset-bottom))}
-.mini{position:fixed;left:max(12px,env(safe-area-inset-left));bottom:calc(12px + env(safe-area-inset-bottom));display:none;gap:8px;align-items:center;z-index:6;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 10px 4px 4px;font-size:12px}
-body.immersive .mini{display:flex}
-.chat{display:none;flex-direction:column;gap:8px}
-body.talk .chat{display:flex}
-body.talk .ctl{display:none}
-.chips{display:flex;gap:6px;flex-wrap:wrap}
-.chips button{font-size:12px;padding:5px 10px}
-.chat form{display:flex;gap:6px}
-.chat input{flex:1;min-width:0;font:inherit;font-size:14px;color:var(--fg);background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:999px;padding:7px 12px}
-.camdot{font-size:11px;color:var(--mute)}
-`;
-document.head.appendChild(css);
-
-const ui = () => document.querySelector(".ui");
-function buildUI() {
-  const dim = document.createElement("div"); dim.className = "dim"; document.body.insertBefore(dim, document.querySelector(".ui"));
-  const sub = document.createElement("div"); sub.className = "sub"; sub.id = "sub"; document.body.appendChild(sub);
-  const dock = document.createElement("div"); dock.className = "dock";
-  dock.innerHTML = `<button class="pwr" id="pwr" aria-label="開機或休眠">⏻</button>
-    <div class="mode"><i></i><span id="modeTxt">休眠待機</span><span class="camdot" id="camdot"></span></div>
-    <label class="vol">音量 <input id="vol" type="range" min="0" max="1" step="0.01" value="0.6"></label>
-    <button class="sense" id="sense" aria-pressed="false">感應</button>`;
-  const chat = document.createElement("div"); chat.className = "dock chat";
-  chat.innerHTML = `<div class="chips"><button data-q="妳在做什麼？">妳在做什麼？</button><button data-q="想聽歌">想聽歌</button><button data-q="妳是誰？">妳是誰？</button><button data-q="晚安">晚安</button></div>
-    <form id="chatForm"><input id="chatIn" placeholder="跟她說話…" autocomplete="off"><button class="primary" type="submit">送出</button></form>`;
-  const u = ui();
-  [...u.children].forEach(c => c.classList.add("ctl"));
-  u.prepend(chat); u.prepend(dock);
-  const mini = document.createElement("div"); mini.className = "mini";
-  mini.innerHTML = `<button class="pwr" id="pwr2" aria-label="開機或休眠">⏻</button><span id="modeTxt2">休眠待機</span>`;
-  document.body.appendChild(mini);
-
-  $("pwr").onclick = $("pwr2").onclick = () => setPower(!awake);
+// ---------------- UI wiring (markup lives in index.html) ----------------
+const $ = id => document.getElementById(id);
+function wireUI() {
+  $("pwr").onclick = () => setPower(!awake);
   $("vol").oninput = e => setVolume(+e.target.value);
   $("sense").onclick = toggleSense;
-  chat.querySelectorAll("[data-q]").forEach(b => b.onclick = () => ask(b.dataset.q));
+  document.querySelectorAll("#chat [data-q]").forEach(b => b.onclick = () => ask(b.dataset.q));
   $("chatForm").onsubmit = e => { e.preventDefault(); const v = $("chatIn").value.trim(); if (v) ask(v); $("chatIn").value = ""; };
-  new ResizeObserver(() => document.body.style.setProperty("--uih", u.offsetHeight + "px")).observe(u);
+  $("voiceTgl").onclick = () => { voiceOn = !voiceOn; $("voiceTgl").setAttribute("aria-pressed", voiceOn); };
 }
-const $ = id => document.getElementById(id);
-function setMode(t) { $("modeTxt").textContent = t; $("modeTxt2").textContent = t; }
+function setMode(t) { $("modeTxt").textContent = t; $("modeTxt2").textContent = awake ? t : "休眠待機 · 點一下喚出介面"; }
 
 // ---------------- speech + subtitles ----------------
 let subT, voice = null;
@@ -100,12 +46,17 @@ function pickVoice() {
 }
 if ("speechSynthesis" in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
 let lastSay = 0;
+const VOICE = window.LG_VOICE || {};   // line text -> audio file, generated from the reference voice
+const vEl = new Audio(); vEl.preload = "auto";
+vEl.onplay = () => duck(true); vEl.onended = vEl.onerror = vEl.onpause = () => duck(false);
 function say(line, opts = {}) {
   if (!line) return;
   const now = performance.now(); if (!opts.force && now - lastSay < 2500) return; lastSay = now;
   const sub = $("sub"); sub.textContent = line; sub.classList.add("on"); clearTimeout(subT);
   subT = setTimeout(() => sub.classList.remove("on"), 1800 + line.length * 180);
-  if (!("speechSynthesis" in window) || !voiceOn) return;
+  if (!voiceOn) return;
+  if (VOICE[line]) { try { vEl.pause(); vEl.src = VOICE[line]; vEl.currentTime = 0; vEl.play().catch(() => {}); } catch (e) {} return; }
+  if (!("speechSynthesis" in window)) return;
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(line); if (voice) u.voice = voice; u.lang = voice ? voice.lang : "zh-TW";
   u.rate = 0.9; u.pitch = 1.15; u.volume = 1;
@@ -136,11 +87,6 @@ function initAudio() {
   const lfo = ac.createOscillator(), lfoG = ac.createGain(); lfo.frequency.value = 0.07; lfoG.gain.value = 0.25; lfo.connect(lfoG); lfoG.connect(airG.gain);
   air.connect(lp); lp.connect(airG); airG.connect(ambBus); air.start(); lfo.start();
   const hum = ac.createOscillator(), humG = ac.createGain(); hum.frequency.value = 55; humG.gain.value = 0.025; hum.connect(humG); humG.connect(ambBus); hum.start();
-  // vinyl crackle (part of the music)
-  const cb = ac.createBuffer(1, ac.sampleRate * 3, ac.sampleRate), cd = cb.getChannelData(0);
-  for (let i = 0; i < cd.length; i++) cd[i] = (Math.random() < 0.0009 ? (Math.random() * 2 - 1) : 0) + (Math.random() * 2 - 1) * 0.012;
-  const cr = ac.createBufferSource(); cr.buffer = cb; cr.loop = true; const crf = ac.createBiquadFilter(); crf.type = "bandpass"; crf.frequency.value = 2500; crf.Q.value = 0.6;
-  const crg = ac.createGain(); crg.gain.value = 0.35; cr.connect(crf); crf.connect(crg); crg.connect(bgmBus); cr.start();
   ramp(ambBus.gain, 0.35, 2);
   scheduler();
 }
@@ -200,10 +146,11 @@ function setPower(on) {
   awake = on;
   if (on) {
     document.body.classList.add("booting"); setMode("啟動中…");
-    if ("speechSynthesis" in window) { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); } // unlock iOS speech
+    try { vEl.muted = true; vEl.src = Object.values(VOICE)[0] || ""; vEl.play().then(() => { vEl.pause(); vEl.muted = false; }).catch(() => { vEl.muted = false; }); } catch (e) {} // unlock iOS audio
+    if ("speechSynthesis" in window) { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); }
     setTimeout(() => {
       document.body.classList.remove("booting"); document.body.classList.add("awake"); restTarget = 0;
-      playing = true; ramp(bgmBus.gain, 0, 0.01); applyBgm(4.5); ramp(ambBus.gain, 0.18, 3);
+      playing = true; ramp(bgmBus.gain, 0, 0.01); applyBgm(4.5); ramp(ambBus.gain, 0, 2.5);
       setMode(modeLabel()); setTimeout(() => say(pick(LINES.boot), { force: true }), 1600);
       scheduleIdleTalk();
     }, 1400);
@@ -228,6 +175,7 @@ function ask(q) {
   for (const [re, ans, fx] of REPLIES) if (re.test(q)) { setTimeout(() => say(pick(ans), { force: true }), 400); fx && fx(); return; }
 }
 
+function camNote(t) { if (t) LG.toast && LG.toast("感應" + t); }
 // ---------------- sensing: phone down = listen, picked up + face = talk ----------------
 let mode = "normal", sensing = false, flatSince = 0, faceAt = 0, ori = { b: 60, g: 0 }, video, detector, lastTalkLine = 0;
 function modeLabel() { return mode === "listen" ? "聆聽模式" : mode === "talk" ? "對話模式" : "運作中"; }
@@ -235,6 +183,7 @@ function setModeState(m) {
   if (m === mode) return; mode = m;
   modeGain = m === "listen" ? 1.35 : m === "talk" ? 0.7 : 1; applyBgm(1.2);
   document.body.classList.toggle("talk", m === "talk");
+  LG.minimalLock = m === "listen"; if (m === "listen") LG.setMinimal && LG.setMinimal(true); else if (m === "talk") LG.poke && LG.poke();
   if (awake) setMode(modeLabel());
   if (m === "listen") say(pick(LINES.listen));
   if (m === "talk" && performance.now() - lastTalkLine > 20000) { lastTalkLine = performance.now(); say(pick(LINES.face), { force: true }); }
@@ -254,18 +203,18 @@ function evalMode() {
 evalMode();
 
 async function toggleSense() {
-  if (sensing) { sensing = false; $("sense").setAttribute("aria-pressed", false); $("camdot").textContent = ""; if (video && video.srcObject) video.srcObject.getTracks().forEach(t => t.stop()); setModeState("normal"); return; }
+  if (sensing) { sensing = false; $("sense").setAttribute("aria-pressed", false); camNote(""); if (video && video.srcObject) video.srcObject.getTracks().forEach(t => t.stop()); setModeState("normal"); return; }
   if (DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function") { try { await DeviceOrientationEvent.requestPermission(); } catch (e) {} }
-  sensing = true; $("sense").setAttribute("aria-pressed", true); $("camdot").textContent = "· 鏡頭啟動中";
+  sensing = true; $("sense").setAttribute("aria-pressed", true); camNote("· 鏡頭啟動中");
   try {
     video = document.createElement("video"); video.playsInline = true; video.muted = true;
     video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 320, height: 240 }, audio: false });
     await video.play();
     detector = await makeDetector();
-    $("camdot").textContent = detector ? "· 鏡頭偵測中" : "· 只用姿態判斷";
+    camNote(detector ? "· 鏡頭偵測中" : "· 只用姿態判斷");
     if (detector) faceLoop();
   } catch (e) {
-    $("camdot").textContent = "· 無法使用鏡頭，只用姿態判斷";
+    camNote("· 無法使用鏡頭，只用姿態判斷");
     detector = null;
   }
   if (!detector) { (function fake() { if (!sensing) return; if (Math.abs(ori.b) > 35) faceAt = performance.now(); setTimeout(fake, 300); })(); }
@@ -282,12 +231,13 @@ async function makeDetector() {
     return { detect: async v => fd.detectForVideo(v, performance.now()).detections.length > 0 };
   } catch (e) { console.warn("face detector unavailable", e); return null; }
 }
+let lastSeen = false;
 async function faceLoop() {
   if (!sensing || !detector) return;
   try { if (video.readyState >= 2 && await detector.detect(video)) faceAt = performance.now(); } catch (e) {}
-  $("camdot").textContent = performance.now() - faceAt < 800 ? "· 偵測到人臉" : "· 鏡頭偵測中";
+  const seen = performance.now() - faceAt < 800; if (seen !== lastSeen) { lastSeen = seen; if (seen) camNote("· 偵測到人臉"); }
   setTimeout(faceLoop, 300);
 }
 
-if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", buildUI); else buildUI();
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wireUI); else wireUI();
 })();
