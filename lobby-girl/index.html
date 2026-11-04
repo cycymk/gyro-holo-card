@@ -4,10 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Lobby Girl Gyro</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 :root{--bg:#17141c;--panel:rgba(29,25,36,.86);--line:#3a3245;--fg:#f3eef8;--mute:#a79cb6;--accent:#ff8a5c;--cyan:#56d6e6;color-scheme:dark}
 html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC",sans-serif;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none}
-canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;transform-origin:50% 55%;will-change:transform}
+.backdrop{position:fixed;inset:-60px;pointer-events:none;background:radial-gradient(60% 45% at 50% 42%,#2c2536 0%,rgba(23,20,28,0) 70%),radial-gradient(38% 6% at 50% 84%,rgba(0,0,0,.55) 0%,rgba(0,0,0,0) 100%);will-change:transform}
+body.immersive .ui,body.immersive .top{display:none}
+.exitfs{position:fixed;top:calc(12px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));z-index:5;width:40px;height:40px;border-radius:50%;padding:0;background:var(--panel);font-size:18px;line-height:1;display:none}
+body.immersive .exitfs{display:block}
 .ui{position:fixed;left:0;right:0;bottom:0;padding:10px max(14px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .bar{pointer-events:auto;background:var(--panel);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:12px;padding:8px 10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 button{font:inherit;font-size:13px;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:999px;padding:6px 12px}
@@ -21,20 +28,23 @@ label input{flex:1;accent-color:var(--accent)}
 </style>
 </head>
 <body>
+<div class="backdrop" id="backdrop"></div>
 <canvas id="c"></canvas>
+<button class="exitfs" id="exitfs" aria-label="離開全螢幕">✕</button>
 <div class="top"><span>Lobby Girl · Spine 4.2</span><span id="status">拖曳看角度，點部位互動</span></div>
 <div class="toast" id="toast"></div>
 <div class="ui">
   <div class="bar">
     <button class="primary" id="gyroBtn">啟用陀螺儀</button>
     <button id="recal">歸零</button>
+    <button id="fs">全螢幕</button>
     <button id="st00" aria-pressed="true">00 Idle</button>
     <button id="st10" aria-pressed="false">10 Idle</button>
     <button id="dbg" aria-pressed="false">部位</button>
   </div>
   <div class="bar">
-    <label>立體 <input id="depth" type="range" min="0" max="2" step="0.05" value="1"></label>
-    <label>擺動 <input id="phys" type="range" min="0" max="2" step="0.05" value="1"></label>
+    <label>視角 <input id="depth" type="range" min="0" max="2" step="0.05" value="1"></label>
+    <label>擺動 <input id="phys" type="range" min="0" max="2" step="0.05" value="0.5"></label>
   </div>
 </div>
 <script src="spine-webgl.min.js"></script>
@@ -42,12 +52,12 @@ label input{flex:1;accent-color:var(--accent)}
 (() => {
 const $ = id => document.getElementById(id);
 const canvas = $("c"), statusEl = $("status"), toastEl = $("toast");
-const ctx = new spine.ManagedWebGLRenderingContext(canvas, { alpha: false });
+const ctx = new spine.ManagedWebGLRenderingContext(canvas, { alpha: true, premultipliedAlpha: true });
 const gl = ctx.gl;
 const am = new spine.AssetManager(ctx);
 am.loadBinary("girl.skel"); am.loadTextureAtlas("girl.atlas");
 
-let skeleton, state, sd, renderer, shapes, boneDepth, lookEntry, baseX = 0, baseY = 0;
+let skeleton, state, sd, renderer, shapes, faceCtrl, lookEntry, immersive = false;
 const tilt = { x: 0, y: 0 }, gyro = { x: 0, y: 0 }, drag = { x: 0, y: 0 };
 let gyroBase = null, gyroRaw = null, gyroOn = false, idleState = "00_Idle_ani", busy = false, showParts = false;
 
@@ -74,16 +84,7 @@ function init() {
   lookEntry = state.setAnimation(2, "02_Look_ani", false); lookEntry.timeScale = 0; lookEntry.mixDuration = 0;
   scheduleBlink();
 
-  // depth per bone from draw order of the meshes weighted to it (later = nearer)
-  const n = sd.slots.length, sum = new Float32Array(sd.bones.length), cnt = new Float32Array(sd.bones.length);
-  skeleton.slots.forEach((slot, i) => {
-    const a = slot.getAttachment(); if (!a || !a.bones) return;
-    const d = i / (n - 1) - 0.5;
-    for (let k = 0; k < a.bones.length;) { const c = a.bones[k++]; for (let j = 0; j < c; j++) { const b = a.bones[k++]; sum[b] += d; cnt[b]++; } }
-  });
-  boneDepth = Array.from(sum, (s, i) => cnt[i] ? s / cnt[i] : 0);
-  // bones with no meshes inherit from parent
-  sd.bones.forEach((b, i) => { if (!cnt[i] && b.parent) boneDepth[i] = boneDepth[b.parent.index]; });
+  faceCtrl = skeleton.findBone("Face_CTRL_1");
 
   renderer = new spine.SceneRenderer(canvas, ctx, true);
   shapes = renderer.shapes;
@@ -128,8 +129,8 @@ function onPart(g, wx, wy) {
 let view = { s: 1, ox: 0, oy: 0 };
 function fit() {
   const W = canvas.width, H = canvas.height, bw = sd.width, bh = sd.height;
-  const s = Math.min(W / (bw * 1.15), (H * 0.86) / bh);
-  view = { s, ox: W / 2 - (sd.x + bw / 2) * s, oy: H * 0.56 - (sd.y + bh / 2) * s };
+  const s = immersive ? Math.min(W / (bw * 1.05), (H * 0.95) / bh) : Math.min(W / (bw * 1.15), (H * 0.8) / bh);
+  view = { s, ox: W / 2 - (sd.x + bw / 2) * s, oy: H * (immersive ? 0.5 : 0.58) - (sd.y + bh / 2) * s };
 }
 function screenToWorld(px, py) { // px,py in CSS px
   const d = canvas.width / canvas.clientWidth, x = px * d, y = (canvas.clientHeight - py) * d;
@@ -195,6 +196,19 @@ $("gyroBtn").onclick = async () => {
     setTimeout(() => { if (!gyroOn) statusEl.textContent = "讀不到陀螺儀（需要 HTTPS 和手機）"; }, 1500);
   } catch (err) { statusEl.textContent = "讀不到陀螺儀"; }
 };
+const backdrop = $("backdrop");
+function setImmersive(on) {
+  immersive = on; document.body.classList.toggle("immersive", on);
+  const el = document.documentElement;
+  try {
+    if (on && !document.fullscreenElement && !document.webkitFullscreenElement) (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el)?.catch?.(() => {});
+    if (!on && (document.fullscreenElement || document.webkitFullscreenElement)) (document.exitFullscreen || document.webkitExitFullscreen).call(document)?.catch?.(() => {});
+  } catch (e) {}
+  setTimeout(resize, 120);
+}
+$("fs").onclick = () => setImmersive(true);
+$("exitfs").onclick = () => setImmersive(false);
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && immersive) setImmersive(false); });
 $("recal").onclick = () => { gyroBase = gyroRaw ? { ...gyroRaw } : null; drag.x = drag.y = 0; };
 
 // ---- loop ----
@@ -205,31 +219,36 @@ function loop(now) {
   const tx = gyro.x + drag.x, ty = gyro.y + drag.y;
   tilt.x += (tx - tilt.x) * 0.16; tilt.y += (ty - tilt.y) * 0.16;
 
-  // eyes follow the viewer: scrub the look animation by tilt
-  if (lookEntry) lookEntry.trackTime = Math.max(0, Math.min(1, 0.5 + tilt.x * 0.35)) * lookEntry.animationEnd * 0.999;
+  // eyes follow the viewer slightly: scrub the look animation by tilt
+  if (lookEntry) lookEntry.trackTime = Math.max(0, Math.min(1, 0.5 + tilt.x * 0.15)) * lookEntry.animationEnd * 0.999;
 
-  // body sway feeds the physics constraints (hair, chest...)
+  // physics only reacts to the change of tilt, kept gentle
   const pk = +$("phys").value;
-  skeleton.physicsTranslate((tilt.x - prevTilt.x) * -260 * pk, (tilt.y - prevTilt.y) * 160 * pk);
+  skeleton.physicsTranslate((tilt.x - prevTilt.x) * -120 * pk, (tilt.y - prevTilt.y) * 70 * pk);
   prevTilt = { x: tilt.x, y: tilt.y };
 
   state.update(dt); state.apply(skeleton);
+  // head faces the viewer through the rig's own Face_CTRL_1 (world offset -> parent local)
+  const vk = +$("depth").value;
+  if (faceCtrl && faceCtrl.parent) {
+    const p = faceCtrl.parent, a = new spine.Vector2(faceCtrl.worldX, faceCtrl.worldY), b = new spine.Vector2(faceCtrl.worldX + tilt.x * 170 * vk, faceCtrl.worldY - tilt.y * 110 * vk);
+    p.worldToLocal(a); p.worldToLocal(b); faceCtrl.x += b.x - a.x; faceCtrl.y += b.y - a.y;
+  }
   skeleton.update(dt);
   skeleton.updateWorldTransform(spine.Physics.update);
 
-  // pseudo 3D: shift each bone by its depth (parallax), slight horizontal squash like turning
-  const K = 120 * +$("depth").value;
-  const bones = skeleton.bones;
-  for (let i = 0; i < bones.length; i++) { const d = boneDepth[i]; bones[i].worldX += tilt.x * d * K; bones[i].worldY -= tilt.y * d * K * 0.6; }
+  // viewpoint: the whole character turns rigidly, the backdrop slides the other way
+  canvas.style.transform = `perspective(1400px) rotateY(${tilt.x * 9 * vk}deg) rotateX(${-tilt.y * 5 * vk}deg)`;
+  backdrop.style.transform = `translate(${-tilt.x * 28 * vk}px, ${-tilt.y * 18 * vk}px)`;
 
   // camera
   fit();
   const cam = renderer.camera; cam.setViewport(canvas.width, canvas.height);
   cam.zoom = 1 / view.s;
-  cam.position.x = (canvas.width / 2 - view.ox) / view.s - tilt.x * 25;
-  cam.position.y = (canvas.height / 2 - view.oy) / view.s + tilt.y * 15;
+  cam.position.x = (canvas.width / 2 - view.ox) / view.s;
+  cam.position.y = (canvas.height / 2 - view.oy) / view.s;
 
-  gl.clearColor(0.09, 0.08, 0.11, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
   renderer.begin();
   renderer.drawSkeleton(skeleton, true);
   if (showParts) {
