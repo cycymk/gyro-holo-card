@@ -65,9 +65,11 @@ label input{flex:1;accent-color:var(--accent)}
   </div>
 </div>
 <script src="spine-webgl.min.js"></script>
+<script src="interact.js"></script>
 <script>
 (() => {
 const $ = id => document.getElementById(id);
+const LG = window.LG = window.LG || {}; if (LG.rest == null) LG.rest = 0;
 const canvas = $("c"), statusEl = $("status"), toastEl = $("toast");
 const ctx = new spine.ManagedWebGLRenderingContext(canvas, { alpha: true, premultipliedAlpha: true });
 const gl = ctx.gl;
@@ -119,7 +121,7 @@ function resize() {
 }
 
 // ---- animations ----
-function scheduleBlink() { setTimeout(() => { if (state) { const e = state.setAnimation(1, "01_Eye_ani", false); e.mixDuration = 0.1; state.addEmptyAnimation(1, 0.2, 0); } scheduleBlink(); }, 2500 + Math.random() * 3500); }
+function scheduleBlink() { setTimeout(() => { if (state && LG.rest < 0.2) { const e = state.setAnimation(1, "01_Eye_ani", false); e.mixDuration = 0.1; state.addEmptyAnimation(1, 0.2, 0); } scheduleBlink(); }, 2500 + Math.random() * 3500); }
 function playActive() {
   if (busy) return; busy = true;
   state.setAnimation(0, "20_Active_ani", false);
@@ -138,6 +140,7 @@ let toastT;
 function toast(t) { toastEl.textContent = t; toastEl.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove("on"), 900); }
 
 function onPart(g, wx, wy) {
+  if (LG.onPart && LG.onPart(g) === false) return;
   const k = +$("phys").value;
   if (g.key === "head") { const e = state.setAnimation(1, "01_Eye_ani", false); e.mixDuration = 0.05; state.addEmptyAnimation(1, 0.2, 0); skeleton.physicsTranslate(40 * k, 25 * k); toast("頭部：眨眼 + 甩髮"); }
   else if (g.key === "arm") { playActive(); toast("手臂：20_Active"); }
@@ -280,7 +283,13 @@ function loop(now) {
   skeleton.physicsTranslate((tilt.x - prevTilt.x) * -120 * pk, (tilt.y - prevTilt.y) * 70 * pk);
   prevTilt = { x: tilt.x, y: tilt.y };
 
-  state.update(dt); state.apply(skeleton);
+  const rest = LG.rest;
+  state.update(dt * (1 - 0.75 * rest)); state.apply(skeleton);
+  // sleep pose: eyes shut, upper body bows forward (blended by LG.rest 0..1)
+  if (rest > 0.001) {
+    sd.findAnimation("01_Eye_ani").apply(skeleton, 0, 1.5, false, null, rest, spine.MixBlend.replace, spine.MixDirection.mixIn);
+    skeleton.findBone("body2").rotation -= 8 * rest; skeleton.findBone("neck").rotation -= 10 * rest; skeleton.findBone("head").rotation -= 12 * rest;
+  }
   // head faces the viewer through the rig's own Face_CTRL_1 (world offset -> parent local)
   const vk = +$("depth").value;
   // face turns less than the view and is clamped so it never over-rotates
@@ -345,6 +354,8 @@ function loop(now) {
   if (am.hasErrors()) { statusEl.textContent = "素材載入失敗：" + JSON.stringify(am.getErrors()); return; }
   if (!am.isLoadingComplete()) return setTimeout(wait, 50);
   init();
+  Object.assign(LG, { toast, setShot, playActive, physics: (x, y) => skeleton.physicsTranslate(x, y), tilt });
+  LG.ready && LG.ready();
 })();
 })();
 </script>
