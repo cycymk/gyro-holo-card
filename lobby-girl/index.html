@@ -28,8 +28,9 @@ body.nobg .bgimg{opacity:0}
 canvas{position:absolute;left:-15%;top:-15%;width:130%;height:130%;display:block;will-change:transform}
 .floorfade{position:absolute;left:0;right:0;bottom:0;height:12%;background:linear-gradient(to top,rgba(168,98,10,.96) 0%,rgba(190,110,11,.7) 35%,rgba(199,115,11,0) 100%);pointer-events:none}
 body.nobg .floorfade{background:linear-gradient(to top,rgba(23,20,28,.95),rgba(23,20,28,0))}
-.dim{position:absolute;inset:0;background:#05040a;opacity:.62;pointer-events:none;transition:opacity 1.6s ease}
+.dim{position:absolute;inset:0;background:#05040a;opacity:.62;pointer-events:none;transition:opacity 3s ease}
 body.awake .dim{opacity:0}
+body.awake.placed .dim{opacity:.18}
 button{font:inherit;font-size:13px;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:999px;padding:7px 12px;cursor:pointer}
 button.primary{background:var(--cyan);border-color:var(--cyan);color:#082429;font-weight:700}
 button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#2a0f04}
@@ -82,7 +83,7 @@ body.settings .sheet{transform:none;opacity:1}
 .openapp.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 body.special .dim{opacity:.8;transition:opacity 2.5s ease}
 body.special .pill{opacity:0;pointer-events:none}
-.dim{transition:opacity 4s ease}
+.dim{transition:opacity 3s ease}
 .sp{position:fixed;left:0;right:0;bottom:calc(var(--bb) + 8px);display:flex;flex-direction:column;align-items:center;gap:14px;z-index:9;opacity:0;pointer-events:none;transform:translateY(12px);transition:opacity .8s ease,transform .8s ease}
 .sp.on{opacity:1;pointer-events:auto;transform:none}
 .sp p{margin:0;font-size:14px;letter-spacing:.12em;color:#f3eef8cc}
@@ -227,8 +228,11 @@ function resize() {
 
 // ---- animations ----
 function scheduleBlink() { setTimeout(() => { if (state && LG.rest < 0.2) { const e = state.setAnimation(1, "01_Eye_ani", false); e.mixDuration = 0.1; state.addEmptyAnimation(1, 0.2, 0); } scheduleBlink(); }, 2500 + Math.random() * 3500); }
+let actAt = 0, kickAt = 0, idleAt = 0;
+function canAct(gap) { const n = performance.now(); if (n - actAt < gap) return false; actAt = n; return true; }
+function kick(x, y) { const n = performance.now(); if (n - kickAt < 1200) return; kickAt = n; skeleton.physicsTranslate(x, y); }
 function playActive() {
-  if (busy) return; busy = true;
+  if (busy || !canAct(3000)) return; busy = true;
   state.setAnimation(0, "20_Active_ani", false);
   const e = state.addAnimation(0, idleState, true, 0);
   e.listener = { start: () => { busy = false; } };
@@ -287,14 +291,14 @@ function chestBottom() { // lowest point of the breast meshes, recomputed each c
 function onPart(g, wx, wy) {
   if (LG.onPart && LG.onPart(g) === false) return;
   const k = +$("phys").value;
-  if (g.key === "head") { const e = state.setAnimation(1, "01_Eye_ani", false); e.mixDuration = 0.05; state.addEmptyAnimation(1, 0.2, 0); skeleton.physicsTranslate(40 * k, 25 * k); }
+  if (g.key === "head") { if (LG.rest < 0.2 && performance.now() - kickAt > 1200) { const e = state.setAnimation(1, "01_Eye_ani", false); e.mixDuration = 0.1; state.addEmptyAnimation(1, 0.2, 0); } kick(30 * k, 18 * k); }
   else if (g.key === "arm") playActive();
-  else if (g.key === "leg") setIdle(idleState === "00_Idle_ani" ? "10_Idle_ani" : "00_Idle_ani");
-  else if (g.key === "chest") { skeleton.physicsTranslate(0, -30 * k); }
+  else if (g.key === "leg") { const n = performance.now(); if (n - idleAt > 8000) { idleAt = n; setIdle(idleState === "00_Idle_ani" ? "10_Idle_ani" : "00_Idle_ani"); } }
+  else if (g.key === "chest") { kick(0, -24 * k); }
   else if (g.key === "waist") { wiggle(); }
 }
-function wiggle() { const k = +$("phys").value; [0, 90, 180, 270].forEach((t, i) => setTimeout(() => skeleton.physicsTranslate((i % 2 ? -1 : 1) * 45 * k, 10 * k), t)); }
-function shake() { let n = 0; const st = stageEl.style; (function f() { st.transform = n < 8 ? `translateX(${(n % 2 ? -1 : 1) * (8 - n)}px)` : ""; if (n++ < 8) setTimeout(f, 40); })(); }
+function wiggle() { const n = performance.now(); if (n - kickAt < 2500) return; kickAt = n; const k = +$("phys").value; [0, 110, 220].forEach((t, i) => setTimeout(() => skeleton.physicsTranslate((i % 2 ? -1 : 1) * 30 * k, 6 * k), t)); }
+function shake() { if (shake.on) return; shake.on = true; setTimeout(() => shake.on = false, 2000); let n = 0; const st = stageEl.style; (function f() { st.transform = n < 8 ? `translateX(${(n % 2 ? -1 : 1) * (8 - n)}px)` : ""; if (n++ < 8) setTimeout(f, 40); })(); }
 LG.fx = { wiggle, shake, playActive };
 
 // ---- camera: pinch to zoom, two-finger pan, double tap toggles ----
@@ -314,14 +318,16 @@ function zoomAt(px, py, z) { // keep the world point under (px,py) fixed while z
   const w = screenToWorld(px, py, camT); camT.z = z; const s = baseScale() * camT.z;
   camT.cx = w.x - (px - VW() / 2) * DPR / s; camT.cy = w.y + (py - VH() / 2) * DPR / s; clampCam(camT);
 }
-function resetCam() { camT.z = ZMIN; camT.cx = 20; clampCam(camT); }
+function resetCam(slow) { if (slow !== false) glide(); camT.z = ZMIN; camT.cx = 20; clampCam(camT); }
 function screenToWorld(px, py, c = cam) {
   const s = baseScale() * c.z;
   return { x: c.cx + (px - VW() / 2) * DPR / s, y: c.cy - (py - VH() / 2) * DPR / s };
 }
 $("camReset").onclick = resetCam;
 const SHOT = { sleep: { z: 1.6, cx: -60, cy: 930 }, wake: { z: 2.0, cx: -170, cy: 1060 }, near: { z: 2.9, cx: -150, cy: 1180 } };
-LG.shot = name => { Object.assign(camT, SHOT[name]); clampCam(camT); };
+let camEase = 0.22, camEaseT = 0.22;
+const glide = () => { camEaseT = 0.025; camEase = 0.025; clearTimeout(glide.t); glide.t = setTimeout(() => camEaseT = 0.22, 4000); };
+LG.shot = name => { glide(); Object.assign(camT, SHOT[name]); clampCam(camT); };
 
 // ---- hit test ----
 const verts = new Float32Array(20000);
@@ -521,7 +527,8 @@ function loop(now) {
   bgimg.style.transform = `translate(${cl(-tilt.x * 45 * vk)}px, ${cl(-tilt.y * 28 * vk)}px)`;
 
   // camera (smoothly follows the gesture target)
-  for (const k of ["z", "cx", "cy"]) cam[k] += (camT[k] - cam[k]) * 0.22;
+  camEase += ((ptrs.size ? 0.22 : camEaseT) - camEase) * 0.1;
+  for (const k of ["z", "cx", "cy"]) cam[k] += (camT[k] - cam[k]) * camEase;
   viewS = baseScale() * cam.z;
   const rc = renderer.camera; rc.setViewport(canvas.width, canvas.height);
   rc.zoom = 1 / viewS; rc.position.x = cam.cx; rc.position.y = cam.cy;
