@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#1a1208">
+<meta name="theme-color" content="#a8650c">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -20,13 +20,13 @@ html.rot .stage{height:100%}
 html.rot .sheet{max-height:70%}
 html,body{background:#a8650c;color:var(--fg);font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC",sans-serif;overflow:hidden;overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 /* stage: everything that moves stays inside a clipped full-screen box, so nothing can widen the page */
-.stage{position:fixed;z-index:0;isolation:isolate;left:0;top:0;width:100%;height:100vh;height:100lvh;overflow:hidden;background:#a8650c}
-.bgimg{position:absolute;inset:-20%;background:#c97a0c url(bg.jpg) center/cover no-repeat;will-change:transform;transition:opacity .3s}
+.stage{position:fixed;z-index:0;isolation:isolate;left:0;top:0;width:100%;height:100vh;height:calc(100lvh + env(safe-area-inset-bottom));overflow:hidden;background:#a8650c}
+.bgimg{position:absolute;inset:-14%;background:#c97a0c url(bg.jpg) center/cover no-repeat;will-change:transform;transition:opacity .3s}
 body.nobg .bgimg{opacity:0}
 .backdrop{position:absolute;inset:-8%;background:radial-gradient(60% 45% at 50% 42%,rgba(44,37,54,.7) 0%,rgba(23,20,28,0) 70%);will-change:transform}
 /* canvas is 30% larger than the screen so the 3D turn never shows its edge */
 canvas{position:absolute;left:-15%;top:-15%;width:130%;height:130%;display:block;will-change:transform}
-.floorfade{position:absolute;left:0;right:0;bottom:0;height:12%;background:linear-gradient(to top,rgba(168,98,10,.96) 0%,rgba(190,110,11,.7) 35%,rgba(199,115,11,0) 100%);pointer-events:none}
+.floorfade{position:absolute;left:0;right:0;bottom:0;height:12%;background:linear-gradient(to top,#a8650c 0%,#a8650c 18%,rgba(190,110,11,.7) 50%,rgba(199,115,11,0) 100%);pointer-events:none}
 body.nobg .floorfade{background:linear-gradient(to top,rgba(23,20,28,.95),rgba(23,20,28,0))}
 .dim{position:absolute;inset:0;background:#05040a;opacity:.62;pointer-events:none;transition:opacity 3s ease}
 body.awake .dim{opacity:0}
@@ -61,11 +61,11 @@ body.awake .pwr{background:var(--cyan);border-color:var(--cyan);color:#082429}
 .vol input{flex:1;min-width:0;accent-color:var(--cyan)}
 body:not(.awake) .vol{visibility:hidden}
 .icon{width:36px;height:36px;border-radius:50%;padding:0;flex:none;font-size:16px}
-.chat{position:fixed;left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));bottom:var(--bb);z-index:5;flex-direction:column;gap:8px;border-radius:18px;padding:8px;display:flex;opacity:0;transform:translateY(calc(100% + var(--bb)));pointer-events:none;transition:opacity .35s ease,transform .45s cubic-bezier(.2,.8,.2,1)}
-body.talk:not(.minimal) .chat,body.chatOpen .chat{opacity:1;transform:none;pointer-events:auto}
-.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;touch-action:pan-x}
+.chat{position:fixed;margin-bottom:var(--kb,0px);left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));bottom:var(--bb);z-index:5;flex-direction:column;gap:8px;border-radius:18px;padding:8px;display:flex;opacity:0;transform:translateY(calc(100% + var(--bb)));pointer-events:none;transition:opacity .35s ease,transform .45s cubic-bezier(.2,.8,.2,1)}
+body.talk:not(.minimal):not(.special) .chat,body.chatOpen:not(.special) .chat{opacity:1;transform:none;pointer-events:auto}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;touch-action:pan-x;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;margin:0 -8px;padding:0 8px;-webkit-mask:linear-gradient(90deg,transparent,#000 14px,#000 calc(100% - 22px),transparent);mask:linear-gradient(90deg,transparent,#000 14px,#000 calc(100% - 22px),transparent)}
 .chips::-webkit-scrollbar{display:none}
-.chips button{flex:none;background:rgba(255,255,255,.06)}
+.chips button{flex:none;background:rgba(255,255,255,.06);scroll-snap-align:start}
 .chips button{font-size:12px;padding:5px 10px}
 .chat form{display:flex;gap:6px}
 .chat input{flex:1;min-width:0;font:inherit;font-size:16px;color:var(--fg);background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:999px;padding:7px 12px;-webkit-user-select:text;user-select:text}
@@ -84,8 +84,9 @@ body.settings .sheet{transform:none;opacity:1}
 body.special .dim{opacity:.8;transition:opacity 2.5s ease}
 body.special .pill{opacity:0;pointer-events:none}
 .dim{transition:opacity 3s ease}
-.sp{position:fixed;left:0;right:0;bottom:calc(var(--bb) + 8px);display:flex;flex-direction:column;align-items:center;gap:14px;z-index:9;opacity:0;pointer-events:none;transform:translateY(12px);transition:opacity .8s ease,transform .8s ease}
-.sp.on{opacity:1;pointer-events:auto;transform:none}
+.sp{position:fixed;left:50%;width:max-content;bottom:calc(var(--bb) + 8px);display:flex;flex-direction:column;align-items:center;gap:14px;z-index:9;opacity:0;pointer-events:none;transform:translate(-50%,12px);transition:opacity .8s ease,transform .8s ease}
+.sp.on{opacity:1;transform:translate(-50%,0)}
+.sp.on button{pointer-events:auto}
 .sp p{margin:0;font-size:14px;letter-spacing:.12em;color:#f3eef8cc}
 .sp .row{gap:12px}
 .sp button{min-width:96px;padding:10px 18px;font-size:14px;background:rgba(16,12,20,.42);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
@@ -96,6 +97,10 @@ body.special .pill{opacity:0;pointer-events:none}
 .fxp{position:fixed;pointer-events:none;z-index:6;font-size:24px;line-height:1;animation:fxup 1.3s ease-out forwards;text-shadow:0 0 8px rgba(255,255,255,.7)}
 @keyframes fxup{from{transform:translate(-50%,-50%) scale(.6);opacity:1}to{transform:translate(calc(-50% + var(--dx)),calc(-50% - 70px)) scale(1.2);opacity:0}}
 body.angry .stage{filter:saturate(1.2) sepia(.25) hue-rotate(-20deg)}
+.shots{position:fixed;right:max(10px,env(safe-area-inset-right));top:38%;display:flex;flex-direction:column;gap:8px;z-index:5;padding:6px;border-radius:999px;background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);transition:opacity .35s ease,transform .45s cubic-bezier(.2,.8,.2,1)}
+.shots button{width:40px;height:40px;padding:0;border-radius:50%;font-size:12px}
+.shots button.on{background:var(--cyan);border-color:var(--cyan);color:#082429;font-weight:700}
+body.minimal .shots,body.special .shots,body.settings .shots{opacity:0;transform:translateX(16px);pointer-events:none}
 .ripple{position:fixed;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;border:2px solid var(--cyan);pointer-events:none;animation:rip .6s ease-out forwards;z-index:4}
 .ripple.hit{border-color:var(--accent);box-shadow:0 0 18px var(--accent)}
 .spark{position:fixed;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:var(--accent);pointer-events:none;z-index:4;animation:spark .55s ease-out forwards}
@@ -107,7 +112,6 @@ body.angry .stage{filter:saturate(1.2) sepia(.25) hue-rotate(-20deg)}
 <body class="minimal">
 <div class="stage" id="stage">
   <div class="bgimg" id="bgimg"></div>
-  <div class="backdrop" id="backdrop"></div>
   <canvas id="c"></canvas>
   <div class="floorfade"></div>
   <div class="dim"></div>
@@ -125,8 +129,9 @@ body.angry .stage{filter:saturate(1.2) sepia(.25) hue-rotate(-20deg)}
     <button class="icon" id="setBtn" aria-label="設定">⚙</button>
   </div>
 </div>
+<div class="shots" id="shots" aria-label="鏡頭"><button data-shot="face">臉</button><button data-shot="chest">胸</button><button data-shot="legs">腿</button><button data-shot="full">全身</button></div>
 <div class="dock chat" id="chat">
-    <div class="chips"><button data-q="妳在做什麼？">妳在做什麼？</button><button data-q="想聽歌">想聽歌</button><button data-q="妳是誰？">妳是誰？</button><button data-q="晚安">晚安</button></div>
+    <div class="chips"><button data-q="我想要">我想要</button><button data-q="講故事">講故事</button><button data-q="哼歌">哼歌</button><button data-q="陪我睡">陪我睡</button><button data-q="妳在做什麼？">妳在做什麼？</button><button data-q="想聽歌">想聽歌</button><button data-q="妳是誰？">妳是誰？</button><button data-q="晚安">晚安</button></div>
     <form id="chatForm"><input id="chatIn" placeholder="跟她說話…" autocomplete="off" enterkeyhint="send"><button class="primary" type="submit">送出</button></form>
   </div>
 <div class="sp" id="spPanel"><p>🎧 <span id="spHint">建議戴上耳機</span></p><div class="row"><button id="spNext">Next</button><button id="spEnd">End</button></div></div>
@@ -251,10 +256,21 @@ LG.minimalLock = false; // interact.js sets this in listen mode
 function setMinimal(on) { document.body.classList.toggle("minimal", on); updateSubPos(); }
 function updateSubPos() {
   const b = document.body.classList, st = document.body.style;
-  st.setProperty("--chath", (b.contains("talk") && !b.contains("minimal") ? $("chat").offsetHeight + 8 : 0) + "px");
+  const chatShown = !b.contains("special") && (b.contains("chatOpen") || b.contains("talk") && !b.contains("minimal"));
+  st.setProperty("--chath", (chatShown ? $("chat").offsetHeight + 8 : 0) + "px");
   const sub = $("sub"); st.setProperty("--subh", (sub.classList.contains("on") ? sub.offsetHeight + 6 : 0) + "px");
 }
 LG.updateSubPos = updateSubPos;
+if (window.visualViewport) {
+  const vv = visualViewport;
+  const onVV = () => {
+    const kb = Math.max(0, innerHeight - vv.height - vv.offsetTop);
+    document.documentElement.style.setProperty("--kb", (kb > 80 ? kb - (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--tb")) || 0) : 0) + "px");
+    if (window.scrollY || document.documentElement.scrollTop) window.scrollTo(0, 0);
+  };
+  vv.addEventListener("resize", onVV); vv.addEventListener("scroll", onVV);
+}
+$("chatIn").addEventListener("focus", () => { setTimeout(() => window.scrollTo(0, 0), 50); setTimeout(() => window.scrollTo(0, 0), 350); });
 new MutationObserver(updateSubPos).observe(document.body, { attributes: true, attributeFilter: ["class"] });
 new MutationObserver(updateSubPos).observe($("sub"), { attributes: true, attributeFilter: ["class"] });
 // iOS Safari (not home-screen app): its floating bottom toolbar covers the last ~60px
@@ -279,9 +295,9 @@ LG.toggleChat = () => {
 // ---- tap safety net: iOS sometimes hands a tap on a button to the layer under it.
 // If a tap lands inside a visible button's box but the browser gave it to something else, press that button for it.
 function uiButtonAt(x, y) {
-  for (const b of document.querySelectorAll(".pill button, .dock button, .sp button, .openapp")) {
+  for (const b of document.querySelectorAll(".pill button, .dock button, .shots button, .sp button, .openapp")) {
     if (getComputedStyle(b).pointerEvents === "none") continue;
-    const layer = b.closest(".pill,.ui,.chat,.sp,.openapp"); if (layer && +getComputedStyle(layer).opacity < 0.5) continue;
+    const layer = b.closest(".pill,.ui,.chat,.shots,.sp,.openapp"); if (layer && +getComputedStyle(layer).opacity < 0.5) continue;
     const r = b.getBoundingClientRect(); if (!r.width) continue;
     if (x >= r.left - 6 && x <= r.right + 6 && y >= r.top - 6 && y <= r.bottom + 6) return b;
   }
@@ -361,6 +377,24 @@ const SHOT = { sleep: { z: 1.6, cx: -60, cy: 930 }, wake: { z: 2.0, cx: -170, cy
 let camEase = 0.22, camEaseT = 0.22;
 const glide = () => { camEaseT = 0.025; camEase = 0.025; clearTimeout(glide.t); glide.t = setTimeout(() => camEaseT = 0.22, 4000); };
 LG.shot = name => { glide(); Object.assign(camT, SHOT[name]); clampCam(camT); };
+const PARTS = { face: /^(Face|eye|pupil|eyelash|eyebrow|mouth)/i, chest: /Breast/i, legs: /(thigh|calf)/i };
+function frameSlots(re, fill) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const sl of skeleton.slots) { const a = sl.getAttachment(); if (!a || !a.computeWorldVertices || !re.test(sl.data.name)) continue;
+    const n = a.worldVerticesLength; a.computeWorldVertices(sl, 0, n, verts, 0, 2);
+    for (let i = 0; i < n; i += 2) { x0 = Math.min(x0, verts[i]); x1 = Math.max(x1, verts[i]); y0 = Math.min(y0, verts[i + 1]); y1 = Math.max(y1, verts[i + 1]); } }
+  if (x0 === Infinity) return;
+  const W = VW() * DPR, H = VH() * DPR, sH = H * 0.72 / ((y1 - y0) * fill), s = re === PARTS.face ? sH : Math.min(W / ((x1 - x0) * fill), sH);
+  glide(); camT.z = Math.max(ZMIN, Math.min(4, s / baseScale())); camT.cx = (x0 + x1) / 2;
+  camT.cy = (y0 + y1) / 2 + VH() * 0.06 * DPR / (baseScale() * camT.z); // sit a little low: the top bar lives above
+  clampCam(camT);
+}
+function goShot(k) {
+  document.querySelectorAll("#shots button").forEach(b => b.classList.toggle("on", b.dataset.shot === k));
+  if (k === "full") resetCam(); else frameSlots(PARTS[k], k === "face" ? 1.9 : k === "chest" ? 1.25 : 1.1);
+}
+document.querySelectorAll("#shots button").forEach(b => b.onclick = () => { goShot(b.dataset.shot); LG.poke && LG.poke(); });
+LG.goShot = goShot;
 
 // ---- hit test ----
 const verts = new Float32Array(20000);
@@ -493,7 +527,7 @@ $("gyroBtn").onclick = () => { gyroAsked = false; enableGyro(); };
 const needsAsk = window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function";
 if (!needsAsk) enableGyro();
 else { const first = () => { enableGyro(); removeEventListener("touchend", first, true); removeEventListener("click", first, true); }; addEventListener("touchend", first, true); addEventListener("click", first, true); }
-const backdrop = $("backdrop"), bgimg = $("bgimg");
+const bgimg = $("bgimg");
 $("bgBtn").onclick = () => { const on = document.body.classList.toggle("nobg"); $("bgBtn").setAttribute("aria-pressed", !on); };
 $("fs").onclick = () => {
   const el = document.documentElement;
@@ -560,9 +594,8 @@ function loop(now) {
   // viewpoint: the whole character turns rigidly, the backdrop slides the other way
   canvas.style.transform = `perspective(1100px) rotateY(${tilt.x * 20 * vk}deg) rotateX(${-tilt.y * 10 * vk}deg) translate3d(${tilt.x * 14 * vk}px, 0, 0) scale(${bounce})`;
   bounce += (1 - bounce) * 0.2;
-  backdrop.style.transform = `translate(${-tilt.x * 60 * vk}px, ${-tilt.y * 36 * vk}px)`;
-  const lim = Math.min(VW(), VH()) * 0.16, cl = v => Math.max(-lim, Math.min(lim, v));
-  bgimg.style.transform = `translate(${cl(-tilt.x * 45 * vk)}px, ${cl(-tilt.y * 28 * vk)}px)`;
+  const lim = Math.min(VW(), VH()) * 0.11, cl = v => Math.max(-lim, Math.min(lim, v));
+  bgimg.style.transform = `translate3d(${cl(-tilt.x * 45 * vk)}px, ${cl(-tilt.y * 28 * vk)}px, 0)`;
 
   // camera (smoothly follows the gesture target)
   camEase += ((ptrs.size ? 0.22 : camEaseT) - camEase) * 0.1;
@@ -593,7 +626,7 @@ function loop(now) {
   if (am.hasErrors()) { statusEl.textContent = "素材載入失敗：" + JSON.stringify(am.getErrors()); return; }
   if (!am.isLoadingComplete()) return setTimeout(wait, 50);
   init();
-  Object.assign(LG, { toast, resetCam, playActive, physics: (x, y) => skeleton.physicsTranslate(x, y), tilt });
+  Object.assign(LG, { toast, resetCam, playActive, physics: (x, y) => skeleton.physicsTranslate(x, y), tilt, slotBox: re => skeleton.slots.filter(sl => re.test(sl.data.name) && sl.getAttachment() && sl.getAttachment().computeWorldVertices).map(sl => { const a = sl.getAttachment(), n = a.worldVerticesLength, v = new Float32Array(n); a.computeWorldVertices(sl, 0, n, v, 0, 2); let ys = [], xs = []; for (let i = 0; i < n; i += 2) { xs.push(v[i]); ys.push(v[i + 1]); } return sl.data.name + ":" + Math.round(Math.min(...xs)) + ".." + Math.round(Math.max(...xs)) + "/" + Math.round(Math.min(...ys)) + ".." + Math.round(Math.max(...ys)); }).join("  "), boneInfo: () => skeleton.bones.filter(b => /head|neck|breast|body|thigh|calf|knee|hip|pelvis|foot/i.test(b.data.name)).map(b => b.data.name + ":" + Math.round(b.worldX) + "," + Math.round(b.worldY)).join(" ") });
   LG.ready && LG.ready();
 })();
 })();

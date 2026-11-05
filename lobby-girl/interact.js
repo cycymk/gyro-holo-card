@@ -126,6 +126,7 @@ function enterSpecial(ids) {
   queue = []; for (const id of ids) { const st = SETS[id]; if (st) st.clips.forEach((c, j) => queue.push({ id, src: c, loop: !!st.loop && j === st.clips.length - 1, name: st.name })); }
   if (special) { qi = -1; playSfx(0); return; }
   special = true; setNear(false); try { vEl.pause(); } catch (e) {}
+  document.body.classList.remove("chatOpen"); try { $("chatIn").blur(); } catch (e) {}
   document.body.classList.add("special"); LG.setMinimal && LG.setMinimal(true); LG.minimalLock = true;
   $("spHint").textContent = "建議戴上耳機"; $("spPanel").classList.add("on");
   if (ac) { ramp(bgmBus.gain, 0, 3); }               // her own sounds take over from the music
@@ -273,6 +274,13 @@ function scheduler() {
 
 // ---------------- power ----------------
 let awake = false, restTarget = 1, idleTalkT;
+// audio route changed (AirPods in/out, mic turned on): wake the audio graph and restart listening so sound follows the new device
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener("devicechange", () => {
+  setTimeout(() => {
+    if (ac) ac.suspend().then(() => ac.resume()).catch(() => {});
+    if (micOn && rec) { try { rec.abort(); } catch (e) {} }   // onend restarts it on the new input
+  }, 600);
+});
 // keep the screen on while she's awake (phone lying down = music mode shouldn't lock the screen)
 let wakeLock = null;
 async function holdScreen(on) {
