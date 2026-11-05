@@ -14,7 +14,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 :root{--bg:#17141c;--panel:rgba(16,12,20,.42);--bb:calc(env(safe-area-inset-bottom) + 12px + var(--tb,0px));--line:rgba(255,255,255,.14);--fg:#f3eef8;--mute:#b5abc3;--accent:#ff8a5c;--cyan:#56d6e6;color-scheme:dark}
-html,body{height:100%;margin:0;background:#a8650c;color:var(--fg);font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC",sans-serif;overflow:hidden;overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+html,body{height:100%;margin:0;}
+html.rot body{position:fixed;left:0;top:0;transform-origin:0 0}
+html.rot .stage{height:100%}
+html.rot .sheet{max-height:70%}
+html,body{background:#a8650c;color:var(--fg);font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC",sans-serif;overflow:hidden;overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 /* stage: everything that moves stays inside a clipped full-screen box, so nothing can widen the page */
 .stage{position:fixed;left:0;top:0;width:100%;height:100vh;height:100lvh;overflow:hidden;background:#a8650c}
 .bgimg{position:absolute;inset:-20%;background:#c97a0c url(bg.jpg) center/cover no-repeat;will-change:transform;transition:opacity .3s}
@@ -133,7 +137,26 @@ body.settings .sheet{transform:none;opacity:1}
 (() => {
 const $ = id => document.getElementById(id);
 const LG = window.LG = window.LG || {}; if (LG.rest == null) LG.rest = 0;
-const stageEl = $("stage"), VH = () => stageEl.clientHeight || innerHeight;
+const stageEl = $("stage"), VH = () => stageEl.clientHeight || innerHeight, VW = () => stageEl.clientWidth || innerWidth;
+// ---- portrait lock: browsers (esp. iOS) can't lock rotation, so when the phone turns sideways we counter-rotate the whole page ----
+let rotA = 0;
+function applyPortraitLock() {
+  const de = document.documentElement, bs = document.body.style;
+  const a = typeof window.orientation === "number" ? window.orientation : screen.orientation ? (screen.orientation.angle > 180 ? screen.orientation.angle - 360 : screen.orientation.angle) : 0;
+  const W = innerWidth, H = innerHeight;
+  rotA = W > H && (a === 90 || a === -90) ? a : 0;
+  de.classList.toggle("rot", !!rotA);
+  if (!rotA) { bs.width = bs.height = bs.transform = ""; return; }
+  bs.width = H + "px"; bs.height = W + "px";
+  bs.transform = rotA === 90 ? `translate(0px, ${H}px) rotate(-90deg)` : `translate(${W}px, 0px) rotate(90deg)`;
+}
+// screen point → page point (inverse of the counter-rotation)
+const PX = e => rotA === 90 ? innerHeight - PY(e) : rotA === -90 ? PY(e) : PX(e);
+const PY = e => rotA === 90 ? PX(e) : rotA === -90 ? innerWidth - PX(e) : PY(e);
+applyPortraitLock();
+addEventListener("resize", applyPortraitLock); addEventListener("orientationchange", () => setTimeout(() => { applyPortraitLock(); dispatchEvent(new Event("resize")); }, 60));
+const tryLock = () => { try { screen.orientation && screen.orientation.lock && screen.orientation.lock("portrait").catch(() => {}); } catch (e) {} };
+addEventListener("click", tryLock, { once: true }); document.addEventListener("fullscreenchange", tryLock);
 const canvas = $("c"), statusEl = $("status"), toastEl = $("toast");
 const ctx = new spine.ManagedWebGLRenderingContext(canvas, { alpha: true, premultipliedAlpha: true });
 const gl = ctx.gl;
@@ -245,22 +268,22 @@ function onPart(g, wx, wy) {
 const B = { x0: -650, x1: 550, y0: -400, y1: 1590 }, ZMIN = 1.06; // y0: just into the stool body, its cut-off base stays hidden
 const cam = { z: 1, cx: (B.x0 + B.x1) / 2, cy: (B.y0 + B.y1) / 2 }, camT = { ...cam };
 let viewS = 1;
-function baseScale() { const W = innerWidth * DPR, H = VH() * DPR; return Math.min(W / (B.x1 - B.x0), H / (B.y1 - B.y0)); }
+function baseScale() { const W = VW() * DPR, H = VH() * DPR; return Math.min(W / (B.x1 - B.x0), H / (B.y1 - B.y0)); }
 function clampCam(c) {
   c.z = Math.max(ZMIN, Math.min(4, c.z));
-  const s = baseScale() * c.z, hw = innerWidth * DPR / 2 / s, hh = VH() * DPR / 2 / s;
+  const s = baseScale() * c.z, hw = VW() * DPR / 2 / s, hh = VH() * DPR / 2 / s;
   c.cx = hw * 2 >= B.x1 - B.x0 ? (B.x0 + B.x1) / 2 : Math.max(B.x0 + hw, Math.min(B.x1 - hw, c.cx));
   c.cy = hh * 2 >= B.y1 - B.y0 ? B.y0 + hh : Math.max(B.y0 + hh, Math.min(B.y1 - hh, c.cy));
   return c;
 }
 function zoomAt(px, py, z) { // keep the world point under (px,py) fixed while zooming
   const w = screenToWorld(px, py, camT); camT.z = z; const s = baseScale() * camT.z;
-  camT.cx = w.x - (px - innerWidth / 2) * DPR / s; camT.cy = w.y + (py - VH() / 2) * DPR / s; clampCam(camT);
+  camT.cx = w.x - (px - VW() / 2) * DPR / s; camT.cy = w.y + (py - VH() / 2) * DPR / s; clampCam(camT);
 }
 function resetCam() { camT.z = ZMIN; camT.cx = 20; clampCam(camT); }
 function screenToWorld(px, py, c = cam) {
   const s = baseScale() * c.z;
-  return { x: c.cx + (px - innerWidth / 2) * DPR / s, y: c.cy - (py - VH() / 2) * DPR / s };
+  return { x: c.cx + (px - VW() / 2) * DPR / s, y: c.cy - (py - VH() / 2) * DPR / s };
 }
 $("camReset").onclick = resetCam;
 const SHOT = { sleep: { z: 1.6, cx: -60, cy: 930 }, wake: { z: 2.0, cx: -170, cy: 1060 } };
@@ -291,15 +314,15 @@ function hitSlot(wx, wy) {
 const ptrs = new Map();
 let down = null, last = null, multi = false, pinch = null, lastTap = { t: 0, x: 0, y: 0 };
 canvas.addEventListener("pointerdown", e => {
-  canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: PX(e), y: PY(e) });
   LG.poke && LG.poke();
-  if (ptrs.size === 1) { down = { x: e.clientX, y: e.clientY, t: performance.now() }; last = { ...down }; multi = false; }
+  if (ptrs.size === 1) { down = { x: PX(e), y: PY(e), t: performance.now() }; last = { ...down }; multi = false; }
   if (ptrs.size === 2) { multi = true; pinch = pinchInfo(); }
 });
 function pinchInfo() { const [a, b] = [...ptrs.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }; }
 canvas.addEventListener("pointermove", e => {
   if (!ptrs.has(e.pointerId)) return;
-  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  ptrs.set(e.pointerId, { x: PX(e), y: PY(e) });
   if (ptrs.size >= 2 && pinch) {
     const p = pinchInfo(), s = baseScale() * camT.z;
     zoomAt(p.mx, p.my, camT.z * p.d / Math.max(1, pinch.d));
@@ -307,7 +330,7 @@ canvas.addEventListener("pointermove", e => {
     pinch = p; return;
   }
   if (!down || multi) return;
-  const dx = (e.clientX - last.x) / innerWidth, dy = (e.clientY - last.y) / VH(); last = { x: e.clientX, y: e.clientY };
+  const dx = (PX(e) - last.x) / VW(), dy = (PY(e) - last.y) / VH(); last = { x: PX(e), y: PY(e) };
   drag.x = Math.max(-1.6, Math.min(1.6, drag.x + dx * 3)); drag.y = Math.max(-1.6, Math.min(1.6, drag.y + dy * 3));
 });
 function feedback(x, y, hit) {
@@ -326,16 +349,16 @@ function endPtr(e) {
   if (ptrs.size < 2) pinch = null;
   if (ptrs.size > 0) return;
   if (down && !multi && e.type === "pointerup") {
-    const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y), dt = performance.now() - down.t;
+    const moved = Math.hypot(PX(e) - down.x, PY(e) - down.y), dt = performance.now() - down.t;
     if (moved < 10 && dt < 400) {
       const now = performance.now();
-      if (now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) { // double tap
-        if (camT.z > ZMIN + 0.15) resetCam(); else zoomAt(e.clientX, e.clientY, 2.4);
+      if (now - lastTap.t < 320 && Math.hypot(PX(e) - lastTap.x, PY(e) - lastTap.y) < 40) { // double tap
+        if (camT.z > ZMIN + 0.15) resetCam(); else zoomAt(PX(e), PY(e), 2.4);
         lastTap.t = 0;
       } else {
-        lastTap = { t: now, x: e.clientX, y: e.clientY };
-        const w = screenToWorld(e.clientX, e.clientY), slot = hitSlot(w.x, w.y), g = slot ? groupOf(slot.data.name) : null;
-        feedback(e.clientX, e.clientY, !!(g && g.key !== "other"));
+        lastTap = { t: now, x: PX(e), y: PY(e) };
+        const w = screenToWorld(PX(e), PY(e)), slot = hitSlot(w.x, w.y), g = slot ? groupOf(slot.data.name) : null;
+        feedback(PX(e), PY(e), !!(g && g.key !== "other"));
         if (g) onPart(g, w.x, w.y);
       }
     }
@@ -435,7 +458,7 @@ function loop(now) {
   canvas.style.transform = `perspective(1100px) rotateY(${tilt.x * 20 * vk}deg) rotateX(${-tilt.y * 10 * vk}deg) translate3d(${tilt.x * 14 * vk}px, 0, 0) scale(${bounce})`;
   bounce += (1 - bounce) * 0.2;
   backdrop.style.transform = `translate(${-tilt.x * 60 * vk}px, ${-tilt.y * 36 * vk}px)`;
-  const lim = Math.min(innerWidth, VH()) * 0.16, cl = v => Math.max(-lim, Math.min(lim, v));
+  const lim = Math.min(VW(), VH()) * 0.16, cl = v => Math.max(-lim, Math.min(lim, v));
   bgimg.style.transform = `translate(${cl(-tilt.x * 45 * vk)}px, ${cl(-tilt.y * 28 * vk)}px)`;
 
   // camera (smoothly follows the gesture target)
