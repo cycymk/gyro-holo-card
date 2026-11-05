@@ -13,7 +13,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
-:root{--bg:#17141c;--panel:rgba(16,12,20,.42);--bb:calc(env(safe-area-inset-bottom) + 12px + var(--tb,0px));--line:rgba(255,255,255,.14);--fg:#f3eef8;--mute:#b5abc3;--accent:#ff8a5c;--cyan:#56d6e6;color-scheme:dark}
+:root{--bg:#17141c;--bb0:calc(env(safe-area-inset-bottom) + 4px + var(--tb,0px));--panel:rgba(16,12,20,.2);--bb:calc(env(safe-area-inset-bottom) + 12px + var(--tb,0px));--line:rgba(255,255,255,.14);--fg:#f3eef8;--mute:#b5abc3;--accent:#ff8a5c;--cyan:#56d6e6;color-scheme:dark}
 html,body{height:100%;margin:0;}
 html.rot body{position:fixed;left:0;top:0;transform-origin:0 0}
 html.rot .stage{height:100%}
@@ -26,7 +26,7 @@ body.nobg .bgimg{opacity:0}
 .backdrop{position:absolute;inset:-8%;background:radial-gradient(60% 45% at 50% 42%,rgba(44,37,54,.7) 0%,rgba(23,20,28,0) 70%);will-change:transform}
 /* canvas is 30% larger than the screen so the 3D turn never shows its edge */
 canvas{position:absolute;left:-15%;top:-15%;width:130%;height:130%;display:block;will-change:transform}
-.floorfade{position:absolute;left:0;right:0;bottom:0;height:12%;background:linear-gradient(to top,#a8650c 0%,#a8650c 18%,rgba(190,110,11,.7) 50%,rgba(199,115,11,0) 100%);pointer-events:none}
+.floorfade{position:absolute;left:0;right:0;bottom:-2px;height:16%;background:linear-gradient(to top,#a8650c 0%,#a8650c 18%,rgba(190,110,11,.7) 50%,rgba(199,115,11,0) 100%);pointer-events:none}
 body.nobg .floorfade{background:linear-gradient(to top,rgba(23,20,28,.95),rgba(23,20,28,0))}
 .dim{position:absolute;inset:0;background:#05040a;opacity:.62;pointer-events:none;transition:opacity 3s ease}
 body.awake .dim{opacity:0}
@@ -46,29 +46,29 @@ body.booting .pill i,body.booting .mode i{background:#ffd166;animation:breathe .
 body:not(.minimal) .pill{opacity:0;transform:translateY(-8px);pointer-events:none}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--bb) + var(--chath,0px) + var(--subh,0px) + 10px);transition:opacity .25s,bottom .3s;white-space:nowrap;background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:999px;font-size:11px;z-index:6;opacity:0;pointer-events:none;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 .toast.on{opacity:1}
-.sub{position:fixed;left:50%;transform:translateX(-50%) translateY(8px);bottom:calc(var(--bb) + var(--chath,0px) + 8px);max-width:min(86vw,520px);width:max-content;box-sizing:border-box;background:rgba(10,8,14,.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fff;font-size:14px;line-height:1.5;padding:7px 14px;border-radius:10px;opacity:0;transition:opacity .3s,transform .3s,bottom .35s;pointer-events:none;z-index:6;text-align:center}
+.sub{position:fixed;left:50%;transform:translateX(-50%) translateY(8px);bottom:calc(var(--bb) + var(--chath,0px) + 8px);max-width:min(86vw,520px);width:max-content;box-sizing:border-box;background:rgba(10,8,14,.32);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6);font-size:14px;line-height:1.5;padding:7px 14px;border-radius:10px;opacity:0;transition:opacity .3s,transform .3s,bottom .35s;pointer-events:none;z-index:6;text-align:center}
 .sub.on{opacity:1;transform:translateX(-50%)}
 /* interaction dock */
 .ui{position:fixed;left:0;right:0;top:0;padding:calc(10px + env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) 10px max(12px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:8px;z-index:5;transition:opacity .35s ease,transform .45s cubic-bezier(.2,.8,.2,1);box-sizing:border-box;pointer-events:none}
 .ui>*{pointer-events:auto}
 body.minimal .ui{opacity:0;transform:translateY(calc(-100% - 8px))}
 body.minimal .ui>*{pointer-events:none}
-.dock{background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:999px;padding:5px;display:flex;gap:6px;align-items:center;min-width:0;box-shadow:0 4px 18px rgba(0,0,0,.18)}
-.pwr{width:36px;height:36px;border-radius:50%;padding:0;font-size:17px;flex:none}
+.dock{background:var(--panel);backdrop-filter:blur(6px) saturate(1.1);-webkit-backdrop-filter:blur(6px) saturate(1.1);text-shadow:0 1px 3px rgba(0,0,0,.55);border:1px solid var(--line);border-radius:999px;padding:5px;display:flex;gap:6px;align-items:center;min-width:0;box-shadow:none;border-color:rgba(255,255,255,.1)}
+.pwr{width:32px;height:32px;border-radius:50%;padding:0;font-size:17px;flex:none}
 body.awake .pwr{background:var(--cyan);border-color:var(--cyan);color:#082429}
 .mode{font-size:12px;display:flex;align-items:center;gap:6px;flex:none;white-space:nowrap}
 .vol{display:flex;align-items:center;gap:6px;flex:1;min-width:0}
 .vol input{flex:1;min-width:0;accent-color:var(--cyan)}
 body:not(.awake) .vol{visibility:hidden}
-.icon{width:36px;height:36px;border-radius:50%;padding:0;flex:none;font-size:16px}
-.chat{position:fixed;margin-bottom:var(--kb,0px);left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));bottom:var(--bb);z-index:5;flex-direction:column;gap:8px;border-radius:18px;padding:8px;display:flex;opacity:0;transform:translateY(calc(100% + var(--bb)));pointer-events:none;transition:opacity .35s ease,transform .45s cubic-bezier(.2,.8,.2,1)}
+.icon{width:32px;height:32px;border-radius:50%;padding:0;flex:none;font-size:16px}
+.chat{position:fixed;margin-bottom:var(--kb,0px);left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));bottom:var(--bb0);z-index:5;flex-direction:column;gap:6px;border-radius:16px;padding:6px;display:flex;opacity:0;transform:translateY(calc(100% + var(--bb)));pointer-events:none;transition:opacity .35s ease,transform .45s cubic-bezier(.2,.8,.2,1)}
 body.talk:not(.minimal):not(.special) .chat,body.chatOpen:not(.special) .chat{opacity:1;transform:none;pointer-events:auto}
 .chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;touch-action:pan-x;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;margin:0 -8px;padding:0 8px;-webkit-mask:linear-gradient(90deg,transparent,#000 14px,#000 calc(100% - 22px),transparent);mask:linear-gradient(90deg,transparent,#000 14px,#000 calc(100% - 22px),transparent)}
 .chips::-webkit-scrollbar{display:none}
 .chips button{flex:none;background:rgba(255,255,255,.06);scroll-snap-align:start}
-.chips button{font-size:12px;padding:5px 10px}
+.chips button{font-size:12px;padding:4px 10px}
 .chat form{display:flex;gap:6px}
-.chat input{flex:1;min-width:0;font:inherit;font-size:16px;color:var(--fg);background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:999px;padding:7px 12px;-webkit-user-select:text;user-select:text}
+.chat input{flex:1;min-width:0;font:inherit;font-size:16px;color:var(--fg);background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:999px;padding:5px 12px;-webkit-user-select:text;user-select:text;background:rgba(255,255,255,.06)}
 /* settings sheet */
 .sheet{position:fixed;left:0;right:0;top:0;z-index:8;background:rgba(18,14,22,.72);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line);border-radius:0 0 18px 18px;padding:calc(14px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 16px max(16px,env(safe-area-inset-left));transform:translateY(-105%);opacity:0;transition:transform .45s cubic-bezier(.2,.8,.2,1),opacity .3s;max-height:70vh;overflow:auto;box-sizing:border-box;touch-action:pan-y}
 body.settings .sheet{transform:none;opacity:1}
@@ -97,8 +97,8 @@ body.special .pill{opacity:0;pointer-events:none}
 .fxp{position:fixed;pointer-events:none;z-index:6;font-size:24px;line-height:1;animation:fxup 1.3s ease-out forwards;text-shadow:0 0 8px rgba(255,255,255,.7)}
 @keyframes fxup{from{transform:translate(-50%,-50%) scale(.6);opacity:1}to{transform:translate(calc(-50% + var(--dx)),calc(-50% - 70px)) scale(1.2);opacity:0}}
 body.angry .stage{filter:saturate(1.2) sepia(.25) hue-rotate(-20deg)}
-.shots{position:fixed;right:max(10px,env(safe-area-inset-right));top:38%;display:flex;flex-direction:column;gap:8px;z-index:5;padding:6px;border-radius:999px;background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);transition:opacity .35s ease,transform .45s cubic-bezier(.2,.8,.2,1)}
-.shots button{width:40px;height:40px;padding:0;border-radius:50%;font-size:12px}
+.shots{position:fixed;right:max(8px,env(safe-area-inset-right));bottom:calc(var(--bb0) + var(--chath,0px) + 10px);display:flex;flex-direction:column;gap:6px;z-index:5;padding:4px;border-radius:999px;background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);transition:opacity .35s ease,transform .45s cubic-bezier(.2,.8,.2,1),bottom .35s ease}
+.shots button{width:34px;height:34px;padding:0;border-radius:50%;font-size:11px;text-shadow:0 1px 3px rgba(0,0,0,.55)}
 .shots button.on{background:var(--cyan);border-color:var(--cyan);color:#082429;font-weight:700}
 body.minimal .shots,body.special .shots,body.settings .shots{opacity:0;transform:translateX(16px);pointer-events:none}
 .ripple{position:fixed;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;border:2px solid var(--cyan);pointer-events:none;animation:rip .6s ease-out forwards;z-index:4}
@@ -283,7 +283,7 @@ LG.poke = () => {
     if (b.contains("chatOpen") && typing) { idleT = setTimeout(idle, 8000); return; }
     b.remove("chatOpen");
     if (!b.contains("settings") && !b.contains("talk") || LG.minimalLock) setMinimal(true);
-  }, b0() ? 20000 : 8000);
+  }, b0() ? 12000 : 4000);
 };
 const b0 = () => document.body.classList.contains("chatOpen");
 // double tap near the bottom (the seat) → chat panel fades in; double tap there again closes it
