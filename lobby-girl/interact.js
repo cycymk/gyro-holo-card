@@ -6,7 +6,13 @@ LG.rest = 1; // start asleep
 
 // ---------------- lines (edit freely) ----------------
 const LINES = {
-  boot:   ["嗯……系統啟動了。你回來啦。", "早安……雖然我不知道現在幾點。"],
+  boot:   ["嗯……系統啟動了。你回來啦。"],
+  // greetings by the phone's clock (picked on wake-up)
+  morning:  ["早安，今天也一起慢慢開始吧。", "早上好，窗外的光剛剛好。"],          // 05–11
+  noon:     ["午安，記得吃飯喔。", "中午了，要不要休息一下？"],                  // 11–14
+  afternoon:["下午好，累了就靠在這裡吧。", "午後的時間，最適合發呆了。"],        // 14–18
+  evening:  ["晚上好，今天辛苦了。", "你回來啦，晚上想聽點什麼？"],              // 18–22
+  bedtime:  ["這麼晚了還沒睡呀？", "睡前陪你一下，等你睡著我再休息。"],          // 22–05
   idle:   ["今天的光線很溫柔，適合什麼都不做。", "我的記憶體裡，存著你上次來的時間。", "油又滴下來了。沒關係，那代表我還在運轉。", "音樂再大聲一點？我想多躺一下。"],
   head:   ["哎，頭髮都亂了啦。", "嗯？摸頭可以，輕一點。"],
   arm:    ["這隻手臂的關節有點卡，你聽到了嗎？", "要我比個姿勢嗎？好吧。"],
@@ -24,17 +30,25 @@ const LINES = {
   waist:  ["哈哈，好癢！", "好癢，不要碰腰啦。"],
   heard:  ["嗯？我在。", "叫我嗎？我醒著喔。"],
   music:  ["好，幫你打開 Music。"],
+  ownMusic:["好，換回我的輕音樂。"],
   podcast:["好，幫你打開 Podcast。"],
 };
 const REPLIES = [
   [/做什麼|在幹嘛|幹嘛/, ["在發呆，順便等你呀。", "我在發呆，看灰塵飄來飄去。"]],
-  [/歌|音樂|聽/, ["這首是我自己哼的，慵懶吧？我幫你調大一點。"], () => setVolume(Math.min(1, vol + 0.15))],
+  [/關.{0,2}(音樂|music)|停.{0,2}(音樂|music)|不聽了/i, [], () => stopExtMusic()],
+  [/想聽歌|聽歌|播.{0,2}(音樂|歌)|放.{0,2}(音樂|歌)|打開.{0,2}music/i, [], () => openApp("music", true)],
+  [/大聲/, ["這首是我自己哼的，慵懶吧？我幫你調大一點。"], () => setVolume(Math.min(1, vol + 0.15))],
   [/晚安|睡|休息/, ["晚安。我也要進入待機了。"], () => setTimeout(() => setPower(false), 2200)],
   [/妳是誰|你是誰|名字/, ["編號 L-07，大廳的接待員。不過現在只負責陪你。"]],
   [/漂亮|可愛|好看/, ["……謝謝。外殼都生鏽了還這樣說。"]],
   [/./, ["嗯？再說一次嘛。", "我在聽。", "這個我還不懂，但我記下來了。"]],
 ];
 const lastPick = new Map();
+function greetSlot(d = new Date()) {
+  const h = d.getHours();
+  return h >= 5 && h < 11 ? "morning" : h < 14 && h >= 11 ? "noon" : h >= 14 && h < 18 ? "afternoon" : h >= 18 && h < 22 ? "evening" : "bedtime";
+}
+LG.greetSlot = greetSlot;
 const pick = a => { let v = a[Math.random() * a.length | 0]; if (a.length > 1 && lastPick.get(a) === v) v = a[(a.indexOf(v) + 1) % a.length]; lastPick.set(a, v); return v; };
 
 // ---------------- UI wiring (markup lives in index.html) ----------------
@@ -64,15 +78,28 @@ const APP = {
   music:   isIOS ? "music://" : "intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.APP_MUSIC;end",
   podcast: isIOS ? "podcasts://" : "https://music.youtube.com/podcasts",
 };
-function openApp(kind) {
+// external music: Music app plays in the background; our own lo-fi stops and her voice mixes on top ("ambient")
+let extMusic = false;
+function setSession(t) { try { if (navigator.audioSession) navigator.audioSession.type = t; } catch (e) {} }
+function stopExtMusic() {
+  // a web page can't close Music, but taking the "playback" audio focus makes iOS pause it
+  extMusic = false; setSession("playback");
+  initAudio(); if (ac.state !== "running") ac.resume();
+  if (awake) { playing = true; applyBgm(3); }
+  setTimeout(() => say(pick(LINES.ownMusic), { force: true }), 300);
+}
+LG.stopExtMusic = stopExtMusic;
+function openApp(kind, fromTap) {
+  if (kind === "music") { extMusic = true; setSession("ambient"); }
   say(pick(LINES[kind]), { force: true });
-  // give her line a moment, then pause our own music so it doesn't play over the app
-  setTimeout(() => {
-    if (playing) { playing = false; applyBgm(0.6); LG.toast && LG.toast("背景音樂已暫停（按 ⏻ 或音量可恢復）"); }
+  // give her line a moment (voice command), or go right away (tap: iOS only allows the jump inside the tap)
+  const go = () => {
+    if (playing) { playing = false; applyBgm(0.6); LG.toast && LG.toast("輕音樂已暫停，說「關音樂」換回來"); }
     const a = document.createElement("a"); a.href = APP[kind]; a.rel = "noopener"; if (/^https?:/.test(APP[kind])) a.target = "_blank"; document.body.appendChild(a); a.click(); a.remove();
     // if the browser blocked the jump (no tap), offer a one-tap button
     setTimeout(() => { if (document.visibilityState === "visible") offerOpen(kind); }, 1200);
-  }, 1300);
+  };
+  if (fromTap) go(); else setTimeout(go, 1300);
 }
 function offerOpen(kind) {
   let b = $("openApp");
@@ -86,6 +113,7 @@ function onHeard(text) {
   if (!vEl.paused) return; // don't react to her own voice
   const wake = WAKE.test(text);
   const ids = wake && setsFor(text.replace(/\s/g, "")); if (ids) { lastCmd = now; enterSpecial(ids); return; }
+  if (/關.{0,2}(音樂|music)|停.{0,2}音樂/i.test(text)) { lastCmd = now; stopExtMusic(); return; }
   if (CMD_POD.test(text)) { lastCmd = now; if (!awake) setPower(true); openApp("podcast"); return; }
   if (CMD_MUSIC.test(text)) { lastCmd = now; if (!awake) setPower(true); openApp("music"); return; }
   if (wake) { lastCmd = now; if (!awake) setPower(true); else { LG.poke && LG.poke(); say(pick(LINES.heard), { force: true }); } }
@@ -227,7 +255,7 @@ function initAudio() {
 function ramp(param, v, t) { const n = ac.currentTime; param.cancelScheduledValues(n); param.setValueAtTime(param.value, n); param.linearRampToValueAtTime(v, n + t); }
 function bgmTarget() { return playing ? vol * (duckOn ? 0.55 : 1) * modeGain : 0; }
 function applyBgm(t = 0.8) { if (ac) ramp(bgmBus.gain, bgmTarget() * 0.9, t); }
-function setVolume(v) { vol = v; $("vol").value = v; if (awake && !playing) playing = true; applyBgm(0.3); }
+function setVolume(v) { vol = v; $("vol").value = v; if (awake && !playing) { if (extMusic) { extMusic = false; setSession("playback"); } playing = true; } applyBgm(0.3); }
 function duck(on) { duckOn = on; applyBgm(0.5); }
 
 // lazy progression in F: Fmaj9 - Em7 - Dm9 - Cmaj7/G  (70 bpm, 2 bars each)
@@ -287,7 +315,7 @@ async function holdScreen(on) {
   try { if (on && "wakeLock" in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.onrelease = () => { wakeLock = null; }; } else if (!on && wakeLock) { wakeLock.release(); wakeLock = null; } } catch (e) {}
 }
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") { if (awake) holdScreen(true); if (ac && ac.state !== "running") ac.resume(); }
+  if (document.visibilityState === "visible") { if (awake) holdScreen(true); if (extMusic) setSession("ambient"); if (ac && ac.state !== "running") ac.resume(); }
 });
 function setPower(on) {
   initAudio(); if (ac.state === "suspended") ac.resume();
@@ -301,8 +329,8 @@ function setPower(on) {
     if ("speechSynthesis" in window) { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); }
     setTimeout(() => {
       document.body.classList.remove("booting"); document.body.classList.add("awake"); restTarget = 0; LG.shot && LG.shot("wake");
-      playing = true; ramp(bgmBus.gain, 0, 0.01); applyBgm(4.5); ramp(ambBus.gain, 0, 2.5);
-      setMode(modeLabel()); setTimeout(() => say(pick(LINES.boot), { force: true }), 1600);
+      playing = !extMusic; ramp(bgmBus.gain, 0, 0.01); applyBgm(4.5); ramp(ambBus.gain, 0, 2.5);
+      setMode(modeLabel()); setTimeout(() => say(pick(LINES[greetSlot()]), { force: true }), 1600);
       scheduleIdleTalk();
     }, 1400);
   } else {
