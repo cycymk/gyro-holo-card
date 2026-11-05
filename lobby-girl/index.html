@@ -20,7 +20,7 @@ html.rot .stage{height:100%}
 html.rot .sheet{max-height:70%}
 html,body{background:#a8650c;color:var(--fg);font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC",sans-serif;overflow:hidden;overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 /* stage: everything that moves stays inside a clipped full-screen box, so nothing can widen the page */
-.stage{position:fixed;left:0;top:0;width:100%;height:100vh;height:100lvh;overflow:hidden;background:#a8650c}
+.stage{position:fixed;z-index:0;isolation:isolate;left:0;top:0;width:100%;height:100vh;height:100lvh;overflow:hidden;background:#a8650c}
 .bgimg{position:absolute;inset:-20%;background:#c97a0c url(bg.jpg) center/cover no-repeat;will-change:transform;transition:opacity .3s}
 body.nobg .bgimg{opacity:0}
 .backdrop{position:absolute;inset:-8%;background:radial-gradient(60% 45% at 50% 42%,rgba(44,37,54,.7) 0%,rgba(23,20,28,0) 70%);will-change:transform}
@@ -88,6 +88,13 @@ body.special .pill{opacity:0;pointer-events:none}
 .sp p{margin:0;font-size:14px;letter-spacing:.12em;color:#f3eef8cc}
 .sp .row{gap:12px}
 .sp button{min-width:96px;padding:10px 18px;font-size:14px;background:rgba(16,12,20,.42);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.hold{position:fixed;width:64px;height:64px;margin:-32px 0 0 -32px;border-radius:50%;pointer-events:none;z-index:6;opacity:0;transition:opacity .3s;background:conic-gradient(var(--cyan) var(--p,0%),rgba(255,255,255,.12) 0);-webkit-mask:radial-gradient(circle,transparent 27px,#000 28px);mask:radial-gradient(circle,transparent 27px,#000 28px)}
+.hold.on{opacity:1;animation:holdp 2.6s linear forwards}
+@property --p{syntax:"<percentage>";inherits:false;initial-value:0%}
+@keyframes holdp{to{--p:100%}}
+.fxp{position:fixed;pointer-events:none;z-index:6;font-size:24px;line-height:1;animation:fxup 1.3s ease-out forwards;text-shadow:0 0 8px rgba(255,255,255,.7)}
+@keyframes fxup{from{transform:translate(-50%,-50%) scale(.6);opacity:1}to{transform:translate(calc(-50% + var(--dx)),calc(-50% - 70px)) scale(1.2);opacity:0}}
+body.angry .stage{filter:saturate(1.2) sepia(.25) hue-rotate(-20deg)}
 .ripple{position:fixed;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;border:2px solid var(--cyan);pointer-events:none;animation:rip .6s ease-out forwards;z-index:4}
 .ripple.hit{border-color:var(--accent);box-shadow:0 0 18px var(--accent)}
 .spark{position:fixed;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:var(--accent);pointer-events:none;z-index:4;animation:spark .55s ease-out forwards}
@@ -126,7 +133,7 @@ body.special .pill{opacity:0;pointer-events:none}
   <h2>設定 <button id="setClose">完成</button></h2>
   <h3>操作</h3>
   <p class="hint">🎙 語音控制：說「Hey 拉比」喚醒、「播音樂」打開 Music、「拉比，打開 Podcast」打開 Podcast。</p>
-  <p class="hint">單指拖曳：轉視角　雙指捏合：縮放　雙指拖曳：移動鏡頭　點兩下：切換放置／互動模式　點角色部位：互動</p>
+  <p class="hint">空白處拖曳：轉視角　點角色：部位反應　在角色上來回滑：撫摸　長按 3 秒：切換放置／互動　雙指：縮放、移動鏡頭</p>
   <h3>感測</h3>
   <div class="row"><button class="primary" id="gyroBtn">重新啟用陀螺儀</button><button id="recal">陀螺儀歸零</button><button id="camReset">鏡頭回全身</button></div>
   <h3>畫面</h3>
@@ -264,14 +271,31 @@ new ResizeObserver(updateSubPos).observe($("chat"));
 let toastT;
 function toast(t) { toastEl.textContent = t; toastEl.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove("on"), 900); }
 
+// part reactions (lines/voice live in interact.js via LG.onPart / LG.onStroke)
+function partOf(slot, wy) {
+  const g = groupOf(slot.data.name);
+  if (g.key !== "body") return g;
+  if (/Breast/i.test(slot.data.name)) return { key: "chest", label: "胸部" };
+  return wy < chestBottom() ? { key: "waist", label: "腰" } : { key: "chest", label: "胸部" };
+}
+function chestBottom() { // lowest point of the breast meshes, recomputed each call (pose moves)
+  let lo = Infinity;
+  for (const sl of skeleton.slots) { const a = sl.getAttachment(); if (!a || !a.computeWorldVertices || !/Breast/i.test(sl.data.name)) continue;
+    const n = a.worldVerticesLength; a.computeWorldVertices(sl, 0, n, verts, 0, 2); for (let i = 1; i < n; i += 2) lo = Math.min(lo, verts[i]); }
+  return lo === Infinity ? 600 : lo;
+}
 function onPart(g, wx, wy) {
   if (LG.onPart && LG.onPart(g) === false) return;
   const k = +$("phys").value;
-  if (g.key === "head") { const e = state.setAnimation(1, "01_Eye_ani", false); e.mixDuration = 0.05; state.addEmptyAnimation(1, 0.2, 0); skeleton.physicsTranslate(40 * k, 25 * k); toast("頭部：眨眼 + 甩髮"); }
-  else if (g.key === "arm") { playActive(); toast("手臂：20_Active"); }
-  else if (g.key === "leg") { setIdle(idleState === "00_Idle_ani" ? "10_Idle_ani" : "00_Idle_ani"); toast("腿：切換 " + idleState.slice(0, 7)); }
-  else if (g.key === "body") { playActive(); skeleton.physicsTranslate(0, -30 * k); toast("身體：20_Active"); }
+  if (g.key === "head") { const e = state.setAnimation(1, "01_Eye_ani", false); e.mixDuration = 0.05; state.addEmptyAnimation(1, 0.2, 0); skeleton.physicsTranslate(40 * k, 25 * k); }
+  else if (g.key === "arm") playActive();
+  else if (g.key === "leg") setIdle(idleState === "00_Idle_ani" ? "10_Idle_ani" : "00_Idle_ani");
+  else if (g.key === "chest") { skeleton.physicsTranslate(0, -30 * k); }
+  else if (g.key === "waist") { wiggle(); }
 }
+function wiggle() { const k = +$("phys").value; [0, 90, 180, 270].forEach((t, i) => setTimeout(() => skeleton.physicsTranslate((i % 2 ? -1 : 1) * 45 * k, 10 * k), t)); }
+function shake() { let n = 0; const st = stageEl.style; (function f() { st.transform = n < 8 ? `translateX(${(n % 2 ? -1 : 1) * (8 - n)}px)` : ""; if (n++ < 8) setTimeout(f, 40); })(); }
+LG.fx = { wiggle, shake, playActive };
 
 // ---- camera: pinch to zoom, two-finger pan, double tap toggles ----
 // B = the whole character; the view never goes below the seat cushion (FLOOR) and zoom 1 always shows all of her
@@ -321,18 +345,35 @@ function hitSlot(wx, wy) {
 }
 
 // ---- input ----
+// one finger on empty space: drag = turn the view.  one finger on her: tap = part reaction, rub = stroke reaction.
+// hold still 3s anywhere = switch placement / interaction.  two fingers = zoom + pan.
 const ptrs = new Map();
-let down = null, last = null, multi = false, pinch = null, lastTap = { t: 0, x: 0, y: 0 };
+let down = null, last = null, multi = false, pinch = null, holdT = null, holdRing = null;
+let stroke = null; // { part, dist, rev, lastDir, x, y }
 canvas.addEventListener("pointerdown", e => {
   canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: PX(e), y: PY(e) });
   LG.poke && LG.poke();
-  if (ptrs.size === 1) { down = { x: PX(e), y: PY(e), t: performance.now() }; last = { ...down }; multi = false; }
-  if (ptrs.size === 2) { multi = true; pinch = pinchInfo(); }
+  if (ptrs.size === 1) {
+    down = { x: PX(e), y: PY(e), t: performance.now() }; last = { ...down }; multi = false;
+    const w = screenToWorld(down.x, down.y), slot = hitSlot(w.x, w.y);
+    down.part = slot ? partOf(slot, w.y) : null; down.w = w;
+    startHold(down.x, down.y);
+  }
+  if (ptrs.size === 2) { multi = true; pinch = pinchInfo(); cancelHold(); stroke = null; }
 });
+function startHold(x, y) {
+  cancelHold();
+  holdRing = document.createElement("div"); holdRing.className = "hold"; holdRing.style.left = x + "px"; holdRing.style.top = y + "px";
+  document.body.appendChild(holdRing);
+  setTimeout(() => holdRing && holdRing.classList.add("on"), 400); // only show the ring once it's clearly a hold
+  holdT = setTimeout(() => { cancelHold(); down = null; try { navigator.vibrate && navigator.vibrate(30); } catch (e) {} LG.toggleMode && LG.toggleMode(); }, 3000);
+}
+function cancelHold() { clearTimeout(holdT); holdT = null; if (holdRing) { holdRing.remove(); holdRing = null; } }
 function pinchInfo() { const [a, b] = [...ptrs.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }; }
 canvas.addEventListener("pointermove", e => {
   if (!ptrs.has(e.pointerId)) return;
-  ptrs.set(e.pointerId, { x: PX(e), y: PY(e) });
+  const x = PX(e), y = PY(e);
+  ptrs.set(e.pointerId, { x, y });
   if (ptrs.size >= 2 && pinch) {
     const p = pinchInfo(), s = baseScale() * camT.z;
     zoomAt(p.mx, p.my, camT.z * p.d / Math.max(1, pinch.d));
@@ -340,8 +381,18 @@ canvas.addEventListener("pointermove", e => {
     pinch = p; return;
   }
   if (!down || multi) return;
-  const dx = (PX(e) - last.x) / VW(), dy = (PY(e) - last.y) / VH(); last = { x: PX(e), y: PY(e) };
-  drag.x = Math.max(-1.6, Math.min(1.6, drag.x + dx * 3)); drag.y = Math.max(-1.6, Math.min(1.6, drag.y + dy * 3));
+  if (Math.hypot(x - down.x, y - down.y) > 10) cancelHold();
+  const dx = x - last.x, dy = y - last.y; last = { x, y };
+  if (down.part && down.part.key !== "other") { // rubbing her
+    if (!stroke) stroke = { part: down.part, dist: 0, rev: 0, lastDir: 0 };
+    stroke.dist += Math.hypot(dx, dy);
+    const dir = Math.abs(dx) >= Math.abs(dy) ? Math.sign(dx) : Math.sign(dy) * 2;
+    if (dir && stroke.lastDir && dir === -stroke.lastDir) { stroke.rev++; LG.onStroke && LG.onStroke(stroke.part, stroke.rev, x, y); }
+    if (dir) stroke.lastDir = dir;
+    if (stroke.dist > 40 && Math.random() < 0.35) LG.strokeFx && LG.strokeFx(stroke.part, stroke.rev, x, y);
+    return;
+  }
+  drag.x = Math.max(-1.6, Math.min(1.6, drag.x + dx / VW() * 3)); drag.y = Math.max(-1.6, Math.min(1.6, drag.y + dy / VH() * 3));
 });
 function feedback(x, y, hit) {
   const r = document.createElement("div"); r.className = "ripple" + (hit ? " hit" : ""); r.style.left = x + "px"; r.style.top = y + "px";
@@ -358,22 +409,17 @@ function endPtr(e) {
   ptrs.delete(e.pointerId);
   if (ptrs.size < 2) pinch = null;
   if (ptrs.size > 0) return;
-  if (down && !multi && e.type === "pointerup") {
+  cancelHold();
+  if (down && !multi && !stroke && e.type === "pointerup") {
     const moved = Math.hypot(PX(e) - down.x, PY(e) - down.y), dt = performance.now() - down.t;
-    if (moved < 10 && dt < 400) {
-      const now = performance.now();
-      if (now - lastTap.t < 320 && Math.hypot(PX(e) - lastTap.x, PY(e) - lastTap.y) < 40) { // double tap
-        LG.toggleMode && LG.toggleMode();
-        lastTap.t = 0;
-      } else {
-        lastTap = { t: now, x: PX(e), y: PY(e) };
-        const w = screenToWorld(PX(e), PY(e)), slot = hitSlot(w.x, w.y), g = slot ? groupOf(slot.data.name) : null;
-        feedback(PX(e), PY(e), !!(g && g.key !== "other"));
-        if (g) onPart(g, w.x, w.y);
-      }
+    if (moved < 10 && dt < 450) {
+      const g = down.part;
+      feedback(down.x, down.y, !!(g && g.key !== "other"));
+      if (g) onPart(g, down.w.x, down.w.y);
     }
   }
-  down = null;
+  if (stroke) LG.onStroke && LG.onStroke(stroke.part, -1); // stroke ended
+  down = null; stroke = null;
 }
 canvas.addEventListener("pointerup", endPtr);
 canvas.addEventListener("pointercancel", endPtr);

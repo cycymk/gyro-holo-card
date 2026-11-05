@@ -15,7 +15,13 @@ const LINES = {
   sleep:  ["我先休息一下……有事再叫醒我。", "進入待機。晚安。"],
   face:   ["啊，你在看我。", "嗨，看得到你喔。", "你拿起手機了，要跟我說話嗎？"],
   listen: ["那我就安靜陪你聽歌。", "放著也好，我會一直在。"],
-  near:   ["……靠這麼近，我小聲一點說喔。", "嘘，這樣就只有你聽得到了。"],
+  near:   ["……靠這麼近，我小聲一點說喔。", "噓，這樣就只有你聽得到了。"],
+  headRub: ["嗯？摸頭可以，輕一點。"],
+  headGood:["好舒服……再摸一下。"],
+  headLove:["最喜歡你了！", "嘿嘿，今天被摸得好開心。"],
+  chest:  ["欸，你在碰哪裡啦。", "……不要一直碰那裡。"],
+  angry:  ["再碰我就要生氣了！", "哼，不理你了。"],
+  waist:  ["哈哈，好癢！", "好癢，不要碰腰啦。"],
   heard:  ["嗯？我在。", "叫我嗎？我醒著喔。"],
   music:  ["好，幫你打開 Music。"],
   podcast:["好，幫你打開 Podcast。"],
@@ -37,9 +43,9 @@ function wireUI() {
   $("vol").oninput = e => setVolume(+e.target.value);
   $("sense").onclick = toggleSense;
   $("mic").onclick = toggleMic;
-  $("spNext").onclick = () => playSfx(sfxIdx + 1);
+  $("spNext").onclick = () => playSfx(qi + 1);
   $("spEnd").onclick = endSpecial;
-  sfxEl.onended = () => { if (special && sfxIdx < SFX.length - 1) setTimeout(() => playSfx(sfxIdx + 1), 900); };
+  sfxEl.onended = () => { if (special && !sfxEl.loop) setTimeout(() => playSfx(qi + 1), 900); };
   document.querySelectorAll("#chat [data-q]").forEach(b => b.onclick = () => ask(b.dataset.q));
   $("chatForm").onsubmit = e => { e.preventDefault(); const v = $("chatIn").value.trim(); if (v) ask(v); $("chatIn").value = ""; };
   $("voiceTgl").onclick = () => { voiceOn = !voiceOn; $("voiceTgl").setAttribute("aria-pressed", voiceOn); };
@@ -78,6 +84,7 @@ function onHeard(text) {
   const now = performance.now(); if (now - lastCmd < 2500) return;
   if (!vEl.paused) return; // don't react to her own voice
   const wake = WAKE.test(text);
+  const ids = wake && setsFor(text.replace(/\s/g, "")); if (ids) { lastCmd = now; enterSpecial(ids); return; }
   if (CMD_POD.test(text)) { lastCmd = now; if (!awake) setPower(true); openApp("podcast"); return; }
   if (CMD_MUSIC.test(text)) { lastCmd = now; if (!awake) setPower(true); openApp("music"); return; }
   if (wake) { lastCmd = now; if (!awake) setPower(true); else { LG.poke && LG.poke(); say(pick(LINES.heard), { force: true }); } }
@@ -103,37 +110,54 @@ function toggleMic() {
 }
 LG.onHeard = onHeard; // for testing
 
-// ---------------- special mode: typed "我想要" → dark screen, headphone hint, play 拉比 sound clips in order ----------------
-let special = false, sfxIdx = -1;
-const SFX = window.LG_SFX || [];
-function enterSpecial() {
-  if (special) return;
+// ---------------- 拉比音效: sound sets (sfx.js). Called by keyword (chat / voice) or by state; "我想要" plays the default sequence ----------------
+// dark screen, headphone hint, Next / End.  A set with loop:true repeats until End.
+let special = false, queue = [], qi = -1, playingSet = null;
+const SETS = window.LG_SFX_SETS || {}, SEQ = window.LG_SFX_SEQUENCES || {};
+function setsFor(text) {
+  for (const [k, ids] of Object.entries(SEQ)) if (text.includes(k)) return ids;
+  for (const [id, st] of Object.entries(SETS)) if ((st.keywords || []).some(w => text.includes(w))) return [id];
+  return null;
+}
+function enterSpecial(ids) {
+  ids = ids || SEQ["我想要"] || Object.keys(SETS);
   if (!awake) setPower(true);
+  queue = []; for (const id of ids) { const st = SETS[id]; if (st) st.clips.forEach((c, j) => queue.push({ id, src: c, loop: !!st.loop && j === st.clips.length - 1, name: st.name })); }
+  if (special) { qi = -1; playSfx(0); return; }
   special = true; setNear(false); try { vEl.pause(); } catch (e) {}
   document.body.classList.add("special"); LG.setMinimal && LG.setMinimal(true); LG.minimalLock = true;
   $("spHint").textContent = "建議戴上耳機"; $("spPanel").classList.add("on");
-  if (ac) { ramp(bgmBus.gain, bgmTarget() * 0.25, 2); }
-  sfxIdx = -1;
-  setTimeout(() => { if (special) playSfx(0); }, 2200);
+  if (ac) { ramp(bgmBus.gain, 0, 3); }               // her own sounds take over from the music
+  qi = -1;
+  setTimeout(() => { if (special) playSfx(0); }, 2400);
 }
 function playSfx(i) {
   if (!special) return;
-  if (!SFX.length) { $("spHint").textContent = "還沒有放入拉比音效（sfx.js）"; return; }
-  sfxIdx = i % SFX.length;
-  $("spHint").textContent = `${sfxIdx + 1} / ${SFX.length}`;
-  if (sfxG && ac) ramp(sfxG.gain, 1, 0.3); else sfxEl.volume = 1;
-  sfxEl.src = SFX[sfxIdx]; sfxEl.currentTime = 0; sfxEl.play().catch(() => {});
+  if (!queue.length) { $("spHint").textContent = "還沒有放入拉比音效（sfx.js）"; return; }
+  if (i >= queue.length) { endSpecial(); return; }
+  qi = i; const q = queue[qi];
+  $("spHint").textContent = `${q.name}　${qi + 1} / ${queue.length}`;
+  if (sfxG && ac) ramp(sfxG.gain, 1, 0.4); else sfxEl.volume = 1;
+  sfxEl.loop = q.loop; sfxEl.src = q.src; sfxEl.currentTime = 0; sfxEl.play().catch(() => {});
 }
 function endSpecial() {
   if (!special) return;
-  if (sfxG && ac) ramp(sfxG.gain, 0, 2.5); else sfxEl.volume = 0.2;
-  setTimeout(() => { sfxEl.pause(); }, 2600);
+  if (sfxG && ac) ramp(sfxG.gain, 0, 3); else sfxEl.volume = 0.2;
+  setTimeout(() => { if (!special) { sfxEl.pause(); sfxEl.loop = false; } }, 3100);
   $("spPanel").classList.remove("on");
   document.body.classList.remove("special");           // .dim fades back over 4s (css)
   special = false; LG.minimalLock = false;
-  manualUntil = performance.now() + 12000; mode = ""; setModeState("listen"); applyBgm(4);
+  manualUntil = performance.now() + 12000; mode = ""; setModeState("listen"); applyBgm(5);
 }
-LG.special = { enter: enterSpecial, next: () => playSfx(sfxIdx + 1), end: endSpecial };
+LG.special = { enter: enterSpecial, next: () => playSfx(qi + 1), end: endSpecial, sets: SETS };
+// state trigger: placement mode at night, nobody touching the phone for N minutes → the set marked auto:"placement-night"
+let placedSince = 0;
+setInterval(() => {
+  if (!awake || special || mode !== "listen") { placedSince = 0; return; }
+  if (!placedSince) placedSince = Date.now();
+  const h = new Date().getHours(), night = h >= 22 || h < 6;
+  for (const [id, st] of Object.entries(SETS)) if (st.auto === "placement-night" && night && Date.now() - placedSince > (st.afterMin || 10) * 60000) { placedSince = Date.now() + 36e5; enterSpecial([id]); }
+}, 20000);
 
 // ---------------- speech + subtitles ----------------
 let subT, voice = null;
@@ -272,14 +296,54 @@ function scheduleIdleTalk() { clearTimeout(idleTalkT); idleTalkT = setTimeout(()
 (function restLoop() { LG.rest += (restTarget - LG.rest) * 0.03; requestAnimationFrame(restLoop); })();
 
 // taps on parts: only react while awake, and speak a line now and then
+// ---------------- touch reactions ----------------
+let chestHits = [], sulkUntil = 0, headLevel = 0, loveUntil = 0;
+function chestTouch() {
+  const now = performance.now(); chestHits = chestHits.filter(t => now - t < 8000); chestHits.push(now);
+  if (chestHits.length >= 3) { chestHits = []; sulkUntil = now + 8000; say(pick(LINES.angry), { force: true }); LG.fx.shake(); document.body.classList.add("angry"); setTimeout(() => document.body.classList.remove("angry"), 2500); }
+  else say(pick(LINES.chest), { force: chestHits.length === 1 });
+}
 LG.onPart = g => {
+  if (special) return false;
   if (!awake) { LG.toast && LG.toast("休眠中：按 ⏻ 喚醒"); return false; }
+  const sulking = performance.now() < sulkUntil;
+  if (g.key === "chest") { chestTouch(); return; }
+  if (sulking) { say("哼。"); return; }
+  if (g.key === "waist") { say(pick(LINES.waist), { force: true }); return; }
   if (Math.random() < 0.6 && LINES[g.key]) say(pick(LINES[g.key]));
+};
+// rubbing: rev = number of back-and-forth turns so far, -1 = finger lifted
+LG.onStroke = (part, rev) => {
+  if (special) return;
+  if (!awake) { if (rev === 2) LG.toast && LG.toast("休眠中：按 ⏻ 喚醒"); return; }
+  const now = performance.now();
+  if (rev < 0) { headLevel = 0; return; }
+  if (part.key === "head") {
+    if (now < sulkUntil) { if (rev === 3) say("哼，現在才來討好我。", { force: true }); return; }
+    if (rev === 2 && headLevel < 1) { headLevel = 1; say(pick(LINES.headRub), { force: true }); }
+    else if (rev === 6 && headLevel < 2) { headLevel = 2; say(pick(LINES.headGood), { force: true }); }
+    else if (rev === 11 && headLevel < 3 && now > loveUntil) { headLevel = 3; loveUntil = now + 8000; say(pick(LINES.headLove), { force: true }); LG.fx.playActive(); burst("💗", 10); }
+  } else if (part.key === "chest") { if (rev % 3 === 0) chestTouch(); }
+  else if (part.key === "waist") { if (rev === 2 || rev % 6 === 0) { say(pick(LINES.waist), { force: true }); LG.fx.wiggle(); } }
+};
+let fxLast = 0;
+function fxAt(ch, x, y) {
+  const d = document.createElement("div"); d.className = "fxp"; d.textContent = ch;
+  d.style.left = x + "px"; d.style.top = y + "px"; d.style.setProperty("--dx", (Math.random() * 60 - 30) + "px");
+  document.body.appendChild(d); setTimeout(() => d.remove(), 1300);
+}
+function burst(ch, n) { const W = document.body.clientWidth, H = document.body.clientHeight; for (let i = 0; i < n; i++) setTimeout(() => fxAt(ch, W * (0.3 + Math.random() * 0.4), H * (0.25 + Math.random() * 0.2)), i * 90); }
+LG.strokeFx = (part, rev, x, y) => {
+  if (special) return;
+  if (!awake || part.key !== "head" || performance.now() < sulkUntil) return;
+  const now = performance.now(); if (now - fxLast < 90) return; fxLast = now;
+  if (rev >= 11) fxAt(Math.random() < 0.5 ? "💗" : "❤️", x, y);
+  else if (rev >= 5) fxAt(Math.random() < 0.5 ? "✨" : "✦", x, y);
 };
 
 // ---------------- chat (canned replies; swap ask() for an AI endpoint later) ----------------
 function ask(q) {
-  if (/我想要/.test(q)) { enterSpecial(); return; }
+  const sfxIds = setsFor(q); if (sfxIds) { enterSpecial(sfxIds); return; }
   if (!awake) setPower(true);
   for (const [re, ans, fx] of REPLIES) if (re.test(q)) { setTimeout(() => say(pick(ans), { force: true }), 400); fx && fx(); return; }
 }

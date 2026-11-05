@@ -32,5 +32,18 @@ window.LG_VOICE = {
 "嗯？我在。": "voice/v30.mp3",
 "叫我嗎？我醒著喔。": "voice/v31.mp3",
 "好，幫你打開 Music。": "voice/v32.mp3",
-"好，幫你打開 Podcast。": "voice/v33.mp3"
+"好，幫你打開 Podcast。": "voice/v33.mp3",
+"好舒服……再摸一下。": "voice/v34.mp3",
+"最喜歡你了！": "voice/v35.mp3",
+"嘿嘿，今天被摸得好開心。": "voice/v36.mp3",
+"欸，你在碰哪裡啦。": "voice/v37.mp3",
+"……不要一直碰那裡。": "voice/v38.mp3",
+"再碰我就要生氣了！": "voice/v39.mp3",
+"哼，不理你了。": "voice/v40.mp3",
+"哈哈，好癢！": "voice/v41.mp3",
+"好癢，不要碰腰啦。": "voice/v42.mp3",
+"哼。": "voice/v43.mp3",
+"哼，現在才來討好我。": "voice/v44.mp3",
+"……靠這麼近，我小聲一點說喔。": "voice/v45.mp3",
+"噓，這樣就只有你聽得到了。": "voice/v46.mp3"
 };
