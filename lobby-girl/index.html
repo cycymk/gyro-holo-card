@@ -62,7 +62,7 @@ body.awake .pwr{background:var(--cyan);border-color:var(--cyan);color:#082429}
 body:not(.awake) .vol{visibility:hidden}
 .icon{width:36px;height:36px;border-radius:50%;padding:0;flex:none;font-size:16px}
 .chat{position:fixed;left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));bottom:var(--bb);z-index:5;flex-direction:column;gap:8px;border-radius:18px;padding:8px;display:flex;opacity:0;transform:translateY(calc(100% + var(--bb)));pointer-events:none;transition:opacity .35s ease,transform .45s cubic-bezier(.2,.8,.2,1)}
-body.talk:not(.minimal) .chat{opacity:1;transform:none;pointer-events:auto}
+body.talk:not(.minimal) .chat,body.chatOpen .chat{opacity:1;transform:none;pointer-events:auto}
 .chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;touch-action:pan-x}
 .chips::-webkit-scrollbar{display:none}
 .chips button{flex:none;background:rgba(255,255,255,.06)}
@@ -260,12 +260,45 @@ new MutationObserver(updateSubPos).observe($("sub"), { attributes: true, attribu
 // iOS Safari (not home-screen app): its floating bottom toolbar covers the last ~60px
 if (/iP(hone|od|ad)/.test(navigator.userAgent) && !navigator.standalone && !matchMedia("(display-mode: standalone)").matches) document.documentElement.style.setProperty("--tb", "58px");
 LG.poke = () => {
-  if (LG.minimalLock) return;
+  if (LG.minimalLock && !document.body.classList.contains("chatOpen")) return;
   setMinimal(false); clearTimeout(idleT);
-  if ($("autoMin").getAttribute("aria-pressed") === "true") idleT = setTimeout(() => { if (!document.body.classList.contains("settings") && !document.body.classList.contains("talk")) setMinimal(true); }, 8000);
+  if ($("autoMin").getAttribute("aria-pressed") === "true") idleT = setTimeout(function idle() {
+    const b = document.body.classList, typing = document.activeElement === $("chatIn") || $("chatIn").value;
+    if (b.contains("chatOpen") && typing) { idleT = setTimeout(idle, 8000); return; }
+    b.remove("chatOpen");
+    if (!b.contains("settings") && !b.contains("talk") || LG.minimalLock) setMinimal(true);
+  }, b0() ? 20000 : 8000);
 };
+const b0 = () => document.body.classList.contains("chatOpen");
+// double tap near the bottom (the seat) → chat panel fades in; double tap there again closes it
+LG.toggleChat = () => {
+  const b = document.body.classList;
+  if (b.contains("chatOpen")) { b.remove("chatOpen"); LG.poke(); return; }
+  b.add("chatOpen"); LG.poke();
+};
+// ---- tap safety net: iOS sometimes hands a tap on a button to the layer under it.
+// If a tap lands inside a visible button's box but the browser gave it to something else, press that button for it.
+function uiButtonAt(x, y) {
+  for (const b of document.querySelectorAll(".pill button, .dock button, .sp button, .openapp")) {
+    if (getComputedStyle(b).pointerEvents === "none") continue;
+    const layer = b.closest(".pill,.ui,.chat,.sp,.openapp"); if (layer && +getComputedStyle(layer).opacity < 0.5) continue;
+    const r = b.getBoundingClientRect(); if (!r.width) continue;
+    if (x >= r.left - 6 && x <= r.right + 6 && y >= r.top - 6 && y <= r.bottom + 6) return b;
+  }
+  return null;
+}
+LG.uiButtonAt = uiButtonAt;
+let pressBtn = null;
+document.addEventListener("pointerdown", e => { pressBtn = uiButtonAt(e.clientX, e.clientY); }, true);
+document.addEventListener("pointerup", e => {
+  const b = pressBtn && pressBtn === (uiButtonAt(e.clientX, e.clientY) || pressBtn) ? pressBtn : null; pressBtn = null;
+  if (!b || b.contains(e.target)) return;
+  const who = e.target.id || (typeof e.target.className === "string" && e.target.className) || e.target.tagName;
+  toast("補按 " + (b.getAttribute("aria-label") || b.textContent.trim()) + "（被 " + who + " 擋住）");
+  b.click();
+}, true);
 LG.setMinimal = setMinimal;
-document.addEventListener("pointerdown", e => { if (!e.target.closest("canvas,#pwr2")) LG.poke(); }, true);
+document.addEventListener("pointerdown", e => { if (e.target.closest("canvas,#pill")) return; const b = LG.uiButtonAt && LG.uiButtonAt(e.clientX, e.clientY); if (b && b.closest("#pill")) return; LG.poke(); }, true);
 $("pillTxt").onclick = () => LG.poke();
 $("setBtn").onclick = () => { document.body.classList.add("settings"); clearTimeout(idleT); };
 $("setClose").onclick = () => { document.body.classList.remove("settings"); LG.poke(); };
@@ -357,6 +390,7 @@ const ptrs = new Map();
 let down = null, last = null, multi = false, pinch = null, holdT = null, holdRing = null;
 let stroke = null; // { part, dist, rev, lastDir, x, y }
 canvas.addEventListener("pointerdown", e => {
+  if (uiButtonAt(e.clientX, e.clientY)) return; // a button's tap that reached the canvas: the safety net presses it
   canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: PX(e), y: PY(e) });
   LG.poke && LG.poke();
   if (ptrs.size === 1) {
@@ -419,7 +453,11 @@ function endPtr(e) {
   if (down && !multi && !stroke && e.type === "pointerup") {
     const moved = Math.hypot(PX(e) - down.x, PY(e) - down.y), dt = performance.now() - down.t;
     if (moved < 10 && dt < 450) {
-      const g = down.part;
+      const g = down.part, now = performance.now();
+      if (down.y > VH() * 0.78) {                  // bottom strip ≈ the seat
+        if (now - (endPtr.seatTap || 0) < 380) { endPtr.seatTap = 0; LG.toggleChat(); down = null; return; }
+        endPtr.seatTap = now;
+      }
       feedback(down.x, down.y, !!(g && g.key !== "other"));
       if (g) onPart(g, down.w.x, down.w.y);
     }

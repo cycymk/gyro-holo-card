@@ -284,7 +284,7 @@ document.addEventListener("visibilitychange", () => {
 function setPower(on) {
   initAudio(); if (ac.state === "suspended") ac.resume();
   if (on === awake) return;
-  if (performance.now() - (setPower.at || -1e9) < 1500) return; // rapid ⏻ taps: ignore until the fade has started
+  if (performance.now() - (setPower.at || -1e9) < 800) return; // rapid ⏻ taps: ignore until the fade has started
   setPower.at = performance.now();
   awake = on; holdScreen(on);
   if (on) {
