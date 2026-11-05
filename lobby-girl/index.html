@@ -80,6 +80,14 @@ body.settings .sheet{transform:none;opacity:1}
 .hint{font-size:12px;color:var(--mute);line-height:1.6;margin:4px 0 0}
 .openapp{position:fixed;left:50%;bottom:calc(var(--bb) + var(--chath,0px) + var(--subh,0px) + 44px);transform:translate(-50%,10px);background:var(--cyan);color:#082429;font-weight:700;font-size:14px;text-decoration:none;padding:10px 18px;border-radius:999px;z-index:7;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;white-space:nowrap}
 .openapp.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+body.special .dim{opacity:.8;transition:opacity 2.5s ease}
+body.special .pill{opacity:0;pointer-events:none}
+.dim{transition:opacity 4s ease}
+.sp{position:fixed;left:0;right:0;bottom:calc(var(--bb) + 8px);display:flex;flex-direction:column;align-items:center;gap:14px;z-index:9;opacity:0;pointer-events:none;transform:translateY(12px);transition:opacity .8s ease,transform .8s ease}
+.sp.on{opacity:1;pointer-events:auto;transform:none}
+.sp p{margin:0;font-size:14px;letter-spacing:.12em;color:#f3eef8cc}
+.sp .row{gap:12px}
+.sp button{min-width:96px;padding:10px 18px;font-size:14px;background:rgba(16,12,20,.42);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 .ripple{position:fixed;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;border:2px solid var(--cyan);pointer-events:none;animation:rip .6s ease-out forwards;z-index:4}
 .ripple.hit{border-color:var(--accent);box-shadow:0 0 18px var(--accent)}
 .spark{position:fixed;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:var(--accent);pointer-events:none;z-index:4;animation:spark .55s ease-out forwards}
@@ -113,11 +121,12 @@ body.settings .sheet{transform:none;opacity:1}
     <div class="chips"><button data-q="妳在做什麼？">妳在做什麼？</button><button data-q="想聽歌">想聽歌</button><button data-q="妳是誰？">妳是誰？</button><button data-q="晚安">晚安</button></div>
     <form id="chatForm"><input id="chatIn" placeholder="跟她說話…" autocomplete="off" enterkeyhint="send"><button class="primary" type="submit">送出</button></form>
   </div>
+<div class="sp" id="spPanel"><p>🎧 <span id="spHint">建議戴上耳機</span></p><div class="row"><button id="spNext">Next</button><button id="spEnd">End</button></div></div>
 <div class="sheet" id="sheet" role="dialog" aria-label="設定">
   <h2>設定 <button id="setClose">完成</button></h2>
   <h3>操作</h3>
   <p class="hint">🎙 語音控制：說「Hey 拉比」喚醒、「播音樂」打開 Music、「拉比，打開 Podcast」打開 Podcast。</p>
-  <p class="hint">單指拖曳：轉視角　雙指捏合：縮放　雙指拖曳：移動鏡頭　點兩下：放大／回全身　點角色部位：互動</p>
+  <p class="hint">單指拖曳：轉視角　雙指捏合：縮放　雙指拖曳：移動鏡頭　點兩下：切換放置／互動模式　點角色部位：互動</p>
   <h3>感測</h3>
   <div class="row"><button class="primary" id="gyroBtn">重新啟用陀螺儀</button><button id="recal">陀螺儀歸零</button><button id="camReset">鏡頭回全身</button></div>
   <h3>畫面</h3>
@@ -132,6 +141,7 @@ body.settings .sheet{transform:none;opacity:1}
 </div>
 <script src="spine-webgl.min.js"></script>
 <script src="voice.js"></script>
+<script src="sfx.js"></script>
 <script src="interact.js"></script>
 <script>
 (() => {
@@ -151,8 +161,8 @@ function applyPortraitLock() {
   bs.transform = rotA === 90 ? `translate(0px, ${H}px) rotate(-90deg)` : `translate(${W}px, 0px) rotate(90deg)`;
 }
 // screen point → page point (inverse of the counter-rotation)
-const PX = e => rotA === 90 ? innerHeight - PY(e) : rotA === -90 ? PY(e) : PX(e);
-const PY = e => rotA === 90 ? PX(e) : rotA === -90 ? innerWidth - PX(e) : PY(e);
+const PX = e => rotA === 90 ? innerHeight - e.clientY : rotA === -90 ? e.clientY : e.clientX;
+const PY = e => rotA === 90 ? e.clientX : rotA === -90 ? innerWidth - e.clientX : e.clientY;
 applyPortraitLock();
 addEventListener("resize", applyPortraitLock); addEventListener("orientationchange", () => setTimeout(() => { applyPortraitLock(); dispatchEvent(new Event("resize")); }, 60));
 const tryLock = () => { try { screen.orientation && screen.orientation.lock && screen.orientation.lock("portrait").catch(() => {}); } catch (e) {} };
@@ -286,7 +296,7 @@ function screenToWorld(px, py, c = cam) {
   return { x: c.cx + (px - VW() / 2) * DPR / s, y: c.cy - (py - VH() / 2) * DPR / s };
 }
 $("camReset").onclick = resetCam;
-const SHOT = { sleep: { z: 1.6, cx: -60, cy: 930 }, wake: { z: 2.0, cx: -170, cy: 1060 } };
+const SHOT = { sleep: { z: 1.6, cx: -60, cy: 930 }, wake: { z: 2.0, cx: -170, cy: 1060 }, near: { z: 2.9, cx: -150, cy: 1180 } };
 LG.shot = name => { Object.assign(camT, SHOT[name]); clampCam(camT); };
 
 // ---- hit test ----
@@ -353,7 +363,7 @@ function endPtr(e) {
     if (moved < 10 && dt < 400) {
       const now = performance.now();
       if (now - lastTap.t < 320 && Math.hypot(PX(e) - lastTap.x, PY(e) - lastTap.y) < 40) { // double tap
-        if (camT.z > ZMIN + 0.15) resetCam(); else zoomAt(PX(e), PY(e), 2.4);
+        LG.toggleMode && LG.toggleMode();
         lastTap.t = 0;
       } else {
         lastTap = { t: now, x: PX(e), y: PY(e) };
@@ -403,7 +413,7 @@ $("fs").onclick = () => {
 $("recal").onclick = () => { gyroBase = gyroRaw ? { ...gyroRaw } : null; drag.x = drag.y = 0; };
 
 // ---- loop ----
-let lastT = performance.now(), prevTilt = { x: 0, y: 0 }, bounce = 1;
+let lookNow = 0.5, lastT = performance.now(), prevTilt = { x: 0, y: 0 }, bounce = 1;
 function loop(now) {
   const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
   if (!down) { drag.x *= 0.92; drag.y *= 0.92; }
@@ -411,7 +421,10 @@ function loop(now) {
   tilt.x += (tx - tilt.x) * 0.16; tilt.y += (ty - tilt.y) * 0.16;
 
   // eyes follow the viewer slightly: scrub the look animation by tilt
-  if (lookEntry) lookEntry.trackTime = Math.max(0, Math.min(1, 0.5 + tilt.x * 0.45)) * lookEntry.animationEnd * 0.999;
+  const placed = document.body.classList.contains("placed") || !document.body.classList.contains("awake");
+  const lookTarget = LG.lookT != null ? LG.lookT : placed ? 0.5 + Math.sin(now / 4200) * 0.3 + Math.sin(now / 1700) * 0.08 : 0.5 + tilt.x * 0.62;
+  lookNow += (lookTarget - lookNow) * (placed ? 0.04 : 0.25);
+  if (lookEntry) lookEntry.trackTime = Math.max(0, Math.min(1, lookNow)) * lookEntry.animationEnd * 0.999;
 
   // physics only reacts to the change of tilt, kept gentle
   const pk = +$("phys").value;

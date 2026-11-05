@@ -15,6 +15,7 @@ const LINES = {
   sleep:  ["我先休息一下……有事再叫醒我。", "進入待機。晚安。"],
   face:   ["啊，你在看我。", "嗨，看得到你喔。", "你拿起手機了，要跟我說話嗎？"],
   listen: ["那我就安靜陪你聽歌。", "放著也好，我會一直在。"],
+  near:   ["……靠這麼近，我小聲一點說喔。", "嘘，這樣就只有你聽得到了。"],
   heard:  ["嗯？我在。", "叫我嗎？我醒著喔。"],
   music:  ["好，幫你打開 Music。"],
   podcast:["好，幫你打開 Podcast。"],
@@ -36,6 +37,9 @@ function wireUI() {
   $("vol").oninput = e => setVolume(+e.target.value);
   $("sense").onclick = toggleSense;
   $("mic").onclick = toggleMic;
+  $("spNext").onclick = () => playSfx(sfxIdx + 1);
+  $("spEnd").onclick = endSpecial;
+  sfxEl.onended = () => { if (special && sfxIdx < SFX.length - 1) setTimeout(() => playSfx(sfxIdx + 1), 900); };
   document.querySelectorAll("#chat [data-q]").forEach(b => b.onclick = () => ask(b.dataset.q));
   $("chatForm").onsubmit = e => { e.preventDefault(); const v = $("chatIn").value.trim(); if (v) ask(v); $("chatIn").value = ""; };
   $("voiceTgl").onclick = () => { voiceOn = !voiceOn; $("voiceTgl").setAttribute("aria-pressed", voiceOn); };
@@ -99,6 +103,38 @@ function toggleMic() {
 }
 LG.onHeard = onHeard; // for testing
 
+// ---------------- special mode: typed "我想要" → dark screen, headphone hint, play 拉比 sound clips in order ----------------
+let special = false, sfxIdx = -1;
+const SFX = window.LG_SFX || [];
+function enterSpecial() {
+  if (special) return;
+  if (!awake) setPower(true);
+  special = true; setNear(false); try { vEl.pause(); } catch (e) {}
+  document.body.classList.add("special"); LG.setMinimal && LG.setMinimal(true); LG.minimalLock = true;
+  $("spHint").textContent = "建議戴上耳機"; $("spPanel").classList.add("on");
+  if (ac) { ramp(bgmBus.gain, bgmTarget() * 0.25, 2); }
+  sfxIdx = -1;
+  setTimeout(() => { if (special) playSfx(0); }, 2200);
+}
+function playSfx(i) {
+  if (!special) return;
+  if (!SFX.length) { $("spHint").textContent = "還沒有放入拉比音效（sfx.js）"; return; }
+  sfxIdx = i % SFX.length;
+  $("spHint").textContent = `${sfxIdx + 1} / ${SFX.length}`;
+  if (sfxG && ac) ramp(sfxG.gain, 1, 0.3); else sfxEl.volume = 1;
+  sfxEl.src = SFX[sfxIdx]; sfxEl.currentTime = 0; sfxEl.play().catch(() => {});
+}
+function endSpecial() {
+  if (!special) return;
+  if (sfxG && ac) ramp(sfxG.gain, 0, 2.5); else sfxEl.volume = 0.2;
+  setTimeout(() => { sfxEl.pause(); }, 2600);
+  $("spPanel").classList.remove("on");
+  document.body.classList.remove("special");           // .dim fades back over 4s (css)
+  special = false; LG.minimalLock = false;
+  manualUntil = performance.now() + 12000; mode = ""; setModeState("listen"); applyBgm(4);
+}
+LG.special = { enter: enterSpecial, next: () => playSfx(sfxIdx + 1), end: endSpecial };
+
 // ---------------- speech + subtitles ----------------
 let subT, voice = null;
 function pickVoice() {
@@ -108,7 +144,7 @@ function pickVoice() {
 if ("speechSynthesis" in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
 let lastSay = 0;
 const VOICE = window.LG_VOICE || {};   // line text -> audio file, generated from the reference voice
-const vEl = new Audio(); vEl.preload = "auto";
+const vEl = new Audio(); vEl.preload = "auto"; const sfxEl = new Audio(); sfxEl.preload = "auto";
 vEl.onplay = () => duck(true); vEl.onended = vEl.onerror = vEl.onpause = () => duck(false);
 function say(line, opts = {}) {
   if (!line) return;
@@ -127,6 +163,7 @@ function say(line, opts = {}) {
 let voiceOn = true;
 
 // ---------------- audio: generated lo-fi + ambience ----------------
+let voiceG = null, sfxG = null;
 let ac, master, bgmBus, ambBus, bgmLevel = 0, vol = 0.6, playing = false, nextBar = 0, bar = 0, duckOn = false, modeGain = 1;
 function initAudio() {
   if (ac) return;
@@ -139,6 +176,8 @@ function initAudio() {
   bgmBus = ac.createGain(); bgmBus.gain.value = 0; bgmBus.connect(master); bgmBus.connect(rev);
   ambBus = ac.createGain(); ambBus.gain.value = 0; ambBus.connect(master);
   LG.audio = { ac, rev };
+  try { voiceG = ac.createGain(); ac.createMediaElementSource(vEl).connect(voiceG); voiceG.connect(master); } catch (e) { voiceG = null; }
+  try { sfxG = ac.createGain(); sfxG.gain.value = 0; ac.createMediaElementSource(sfxEl).connect(sfxG); sfxG.connect(master); } catch (e) { sfxG = null; }
   // ambience: brown-noise air with slow swell + faint machine hum
   const nb = ac.createBuffer(1, ac.sampleRate * 4, ac.sampleRate), nd = nb.getChannelData(0); let last = 0;
   for (let i = 0; i < nd.length; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; nd[i] = last * 3.5; }
@@ -240,6 +279,7 @@ LG.onPart = g => {
 
 // ---------------- chat (canned replies; swap ask() for an AI endpoint later) ----------------
 function ask(q) {
+  if (/我想要/.test(q)) { enterSpecial(); return; }
   if (!awake) setPower(true);
   for (const [re, ans, fx] of REPLIES) if (re.test(q)) { setTimeout(() => say(pick(ans), { force: true }), 400); fx && fx(); return; }
 }
@@ -247,28 +287,55 @@ function ask(q) {
 function camNote(t) { if (t) LG.toast && LG.toast("感應" + t); }
 // ---------------- sensing: phone down = listen, picked up + face = talk ----------------
 let mode = "normal", sensing = false, flatSince = 0, faceAt = 0, ori = { b: 60, g: 0 }, video, detector, lastTalkLine = 0;
-function modeLabel() { return mode === "listen" ? "聆聽模式" : mode === "talk" ? "對話模式" : "運作中"; }
+function modeLabel() { return mode === "listen" ? "放置模式" : mode === "talk" ? "對話模式" : "互動模式"; }
 function setModeState(m) {
   if (m === mode) return; mode = m;
   modeGain = m === "listen" ? 1.35 : m === "talk" ? 0.7 : 1; applyBgm(1.2);
   document.body.classList.toggle("talk", m === "talk");
   LG.minimalLock = m === "listen"; if (m === "listen") LG.setMinimal && LG.setMinimal(true); else if (m === "talk") LG.poke && LG.poke();
   if (awake) setMode(modeLabel());
+  document.body.classList.toggle("placed", m === "listen");
+  if (awake && !special) { if (m === "listen") { setNear(false); LG.resetCam && LG.resetCam(); } else if (!near) LG.shot && LG.shot("wake"); }
   if (m === "listen") say(pick(LINES.listen));
   if (m === "talk" && performance.now() - lastTalkLine > 20000) { lastTalkLine = performance.now(); say(pick(LINES.face), { force: true }); }
 }
 addEventListener("deviceorientation", e => { if (e.beta != null) ori = { b: e.beta, g: e.gamma }; });
+// near/far: face size in the front camera. near → camera pushes in and she whispers; far + phone still 5s → placement
+let faceSize = 0, near = false, nearSince = 0, stillSince = 0, lastOri = null, manualUntil = 0;
+function setNear(on) {
+  if (on === near) return; near = on;
+  if (voiceG && ac) ramp(voiceG.gain, on ? 0.5 : 1, 0.6);
+  if (awake && !special && mode !== "listen") LG.shot && LG.shot(on ? "near" : "wake");
+  if (on && awake && !special) say(pick(LINES.near));
+}
 function evalMode() {
-  if (awake && sensing) {
-    const now = performance.now(), flat = Math.abs(ori.b) < 18 && Math.abs(ori.g) < 18;
+  const now = performance.now();
+  if (lastOri) { const d = Math.abs(ori.b - lastOri.b) + Math.abs(ori.g - lastOri.g); if (d > 1.5) stillSince = 0; else if (!stillSince) stillSince = now; }
+  lastOri = { ...ori };
+  if (awake && sensing && !special && now > manualUntil) {
+    const flat = Math.abs(ori.b) < 18 && Math.abs(ori.g) < 18, seen = now - faceAt < 1500;
     if (flat) { if (!flatSince) flatSince = now; } else flatSince = 0;
+    // near / far by face size (fraction of the camera frame width)
+    if (seen && faceSize > 0.42) { if (!nearSince) nearSince = now; if (now - nearSince > 600) setNear(true); }
+    else { nearSince = 0; if (!seen || faceSize < 0.32) setNear(false); }
+    const far = !seen || faceSize < 0.2;
     if (flatSince && now - flatSince > 1200) setModeState("listen");
-    else if (!flat && now - faceAt < 1500) setModeState("talk");
-    else if (!flat && mode === "listen") setModeState("normal");
-    else if (!flat && mode === "talk" && now - faceAt > 6000) setModeState("normal");
+    else if (far && stillSince && now - stillSince > 5000) setModeState("listen");
+    else if (mode === "listen" && !flat && (seen && faceSize >= 0.2 || !stillSince)) setModeState(seen ? "talk" : "normal");
+    else if (mode !== "listen" && seen) setModeState("talk");
+    else if (mode === "talk" && now - faceAt > 6000) setModeState("normal");
   }
   setTimeout(evalMode, 250);
 }
+// double tap: switch placement ⇄ interaction by hand (auto sensing waits 12s so it doesn't flip straight back)
+LG.toggleMode = () => {
+  if (special) return;
+  if (!awake) { setPower(true); return; }
+  manualUntil = performance.now() + 12000; setNear(false);
+  setModeState(mode === "listen" ? "normal" : "listen");
+  LG.toast && LG.toast(mode === "listen" ? "放置模式" : "互動模式");
+};
+LG.mode = () => mode;
 evalMode();
 
 async function toggleSense() {
@@ -286,10 +353,10 @@ async function toggleSense() {
     camNote("· 無法使用鏡頭，只用姿態判斷");
     detector = null;
   }
-  if (!detector) { (function fake() { if (!sensing) return; if (Math.abs(ori.b) > 35) faceAt = performance.now(); setTimeout(fake, 300); })(); }
+  if (!detector) { (function fake() { if (!sensing) return; if (Math.abs(ori.b) > 35) { faceAt = performance.now(); faceSize = 0.3; } setTimeout(fake, 300); })(); }
 }
 async function makeDetector() {
-  if ("FaceDetector" in window) { try { const fd = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 }); return { detect: async v => (await fd.detect(v)).length > 0 }; } catch (e) {} }
+  if ("FaceDetector" in window) { try { const fd = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 }); return { detect: async v => { const r = await fd.detect(v); return r.length ? r[0].boundingBox.width / (v.videoWidth || 320) : 0; } }; } catch (e) {} }
   try {
     const base = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
     const mp = await import(base + "/vision_bundle.mjs");
@@ -297,13 +364,13 @@ async function makeDetector() {
     const fd = await mp.FaceDetector.createFromOptions(files, {
       baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite", delegate: "GPU" },
       runningMode: "VIDEO", minDetectionConfidence: 0.5 });
-    return { detect: async v => fd.detectForVideo(v, performance.now()).detections.length > 0 };
+    return { detect: async v => { const d = fd.detectForVideo(v, performance.now()).detections; return d.length ? d[0].boundingBox.width / (v.videoWidth || 320) : 0; } };
   } catch (e) { console.warn("face detector unavailable", e); return null; }
 }
 let lastSeen = false;
 async function faceLoop() {
   if (!sensing || !detector) return;
-  try { if (video.readyState >= 2 && await detector.detect(video)) faceAt = performance.now(); } catch (e) {}
+  try { if (video.readyState >= 2) { const r = await detector.detect(video); if (r > 0) { faceAt = performance.now(); faceSize = faceSize ? faceSize * 0.6 + r * 0.4 : r; } else faceSize *= 0.8; } } catch (e) {}
   const seen = performance.now() - faceAt < 800; if (seen !== lastSeen) { lastSeen = seen; if (seen) camNote("· 偵測到人臉"); }
   setTimeout(faceLoop, 300);
 }
