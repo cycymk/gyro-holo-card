@@ -169,6 +169,10 @@ function applyPortraitLock() {
   const W = innerWidth, H = innerHeight;
   rotA = W > H && (a === 90 || a === -90) ? a : 0;
   de.classList.toggle("rot", !!rotA);
+  // iOS home-screen app with a translucent status bar reports 100vh/innerHeight short by the top inset,
+  // which left a flat strip under the home bar. Size the stage to the real screen height there.
+  const standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
+  stageEl.style.height = !rotA && standalone ? Math.max(innerHeight, screen.height, screen.width) + "px" : "";
   if (!rotA) { bs.width = bs.height = bs.transform = ""; return; }
   bs.width = H + "px"; bs.height = W + "px";
   bs.transform = rotA === 90 ? `translate(0px, ${H}px) rotate(-90deg)` : `translate(${W}px, 0px) rotate(90deg)`;
