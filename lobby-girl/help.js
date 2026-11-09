@@ -45,6 +45,7 @@ function askPermissions() {
   const gb = $("gyroBtn"); if (gb) gb.click();                                   // motion sensor (iOS asks)
   if ($("cMic").checked && LG.toggleMic && !(LG.micOn && LG.micOn())) LG.toggleMic();       // microphone + speech
   if ($("cCam").checked && LG.toggleSense && !(LG.sensing && LG.sensing())) LG.toggleSense(); // front camera
+  if ($("cLoc").checked && LG.useLocation) LG.useLocation();                            // location → local weather
   show(2);
 }
 function wire() {
