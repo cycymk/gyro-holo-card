@@ -107,6 +107,25 @@ body.minimal .shots,body.special .shots,body.settings .shots{opacity:0;transform
 @keyframes rip{from{transform:scale(1);opacity:.9}to{transform:scale(6);opacity:0}}
 @keyframes spark{from{transform:translate(0,0);opacity:1}to{transform:translate(var(--dx),var(--dy));opacity:0}}
 @media (prefers-reduced-motion:reduce){.ripple,.spark{animation-duration:.01s}}
+/* help / first-run intro */
+.help{position:fixed;inset:0;z-index:20;display:flex;align-items:flex-end;justify-content:center;padding:16px;padding-bottom:calc(env(safe-area-inset-bottom) + 16px + var(--tb,0px));box-sizing:border-box;background:rgba(10,8,14,.42);opacity:0;pointer-events:none;transition:opacity .45s}
+.help.on{opacity:1;pointer-events:auto}
+.hcard{width:100%;max-width:420px;background:rgba(24,18,30,.86);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:20px;padding:18px 18px 14px;box-sizing:border-box;transform:translateY(16px);transition:transform .45s cubic-bezier(.2,.8,.2,1);max-height:78vh;overflow:auto;touch-action:pan-y}
+.help.on .hcard{transform:none}
+.hpage{display:none}.hpage.on{display:block;animation:hin .35s ease}
+@keyframes hin{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}
+.hcard h2{margin:0;font-size:20px;letter-spacing:.5px}.hcard .hsub{margin:2px 0 12px;color:var(--mute);font-size:12px}
+.hcard p,.hcard li{font-size:14px;line-height:1.55}.hcard p{margin:8px 0}
+.hsteps{margin:6px 0;padding-left:22px}.hico{display:inline-block;padding:0 4px;border:1px solid var(--line);border-radius:6px;margin-left:4px;font-size:12px}
+.hnote{color:var(--mute);font-size:12px!important}.hok{color:#8de0a6}
+.perm{list-style:none;margin:8px 0;padding:0}.perm li{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.perm li:last-child{border-bottom:0}.perm .pi{font-size:20px;width:26px;text-align:center}.perm div{flex:1}.perm small{display:block;color:var(--mute);font-size:12px;line-height:1.4}
+.perm input{width:20px;height:20px;accent-color:var(--cyan)}
+.howto{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.howto div{background:rgba(255,255,255,.05);border-radius:12px;padding:8px 10px;font-size:13px;line-height:1.35}.howto b{display:block;font-size:12px;color:var(--cyan);font-weight:600}
+.hfoot{display:flex;align-items:center;gap:8px;margin-top:12px}.hfoot .sp1{flex:1}
+.hdots{display:flex;gap:5px;flex:1}.hdots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.25)}.hdots i.on{background:var(--fg)}
+.hfoot button{font-size:14px;padding:8px 14px}.hfoot .ghost{background:none;border-color:transparent;color:var(--mute)}
+body.helpOpen .pill,body.helpOpen .ui,body.helpOpen .shots,body.helpOpen .chat{opacity:0!important;pointer-events:none!important}
 </style>
 </head>
 <body class="minimal">
@@ -140,6 +159,7 @@ body.minimal .shots,body.special .shots,body.settings .shots{opacity:0;transform
   <h3>操作</h3>
   <p class="hint">🎙 語音控制：說「Hey 拉比」喚醒、「播音樂」打開 Music、「拉比，打開 Podcast」打開 Podcast。</p>
   <p class="hint">空白處拖曳：轉視角　點角色：部位反應　在角色上來回滑：撫摸　長按 3 秒：切換放置／互動　雙指：縮放、移動鏡頭</p>
+  <div class="row"><button class="primary" id="helpBtn">說明 / Help</button><button id="guideReset">重新讓拉比引導</button></div>
   <h3>感測</h3>
   <div class="row"><button class="primary" id="gyroBtn">重新啟用陀螺儀</button><button id="recal">陀螺儀歸零</button><button id="camReset">鏡頭回全身</button></div>
   <h3>畫面</h3>
@@ -152,10 +172,49 @@ body.minimal .shots,body.special .shots,body.settings .shots{opacity:0;transform
   <div class="row"><button id="voiceTgl" aria-pressed="true">角色語音</button><button id="autoMin" aria-pressed="true">閒置自動精簡</button></div>
   <p class="hint" id="status">陀螺儀預設開啟（iPhone 第一次點畫面時會詢問權限）</p>
 </div>
+<div class="help" id="help" role="dialog" aria-label="說明">
+  <div class="hcard">
+    <section class="hpage">
+      <h2>Lobby Girl</h2><p class="hsub">拉比 · 手機互動原型（開發測試版）</p>
+      <p>目前在 <b>iPhone</b> 上開發測試。拉比會用聲音、表情和你互動，戴上耳機效果最好。</p>
+      <div id="hInstall"></div>
+    </section>
+    <section class="hpage">
+      <h2>需要的權限</h2><p class="hsub">按「允許」後，手機會依序跳出系統詢問</p>
+      <ul class="perm">
+        <li><span class="pi">📱</span><div><b>陀螺儀</b><small>轉動手機，拉比會立體地跟著傾斜</small></div></li>
+        <li><span class="pi">🎙</span><div><b>麥克風</b><small>說「Hey 拉比」叫她、用說的點歌</small></div><input type="checkbox" id="cMic" checked aria-label="開啟語音控制"></li>
+        <li><span class="pi">📷</span><div><b>前鏡頭</b><small>只在手機上判斷你的臉離多近，不錄影、不上傳</small></div><input type="checkbox" id="cCam" checked aria-label="開啟鏡頭感應"></li>
+        <li><span class="pi">🎧</span><div><b>聲音</b><small>建議戴耳機；iPhone 側邊靜音開關要打開聲音</small></div></li>
+      </ul>
+      <p class="hnote">之後都可以在 ⚙ 設定、🎙、◉ 關掉。</p>
+    </section>
+    <section class="hpage">
+      <h2>怎麼跟拉比互動</h2>
+      <div class="howto">
+        <div><b>⏻ 左上角</b>喚醒／休眠</div>
+        <div><b>👆 頭上來回滑</b>摸摸頭</div>
+        <div><b>✋ 拖曳空白處</b>轉動視角</div>
+        <div><b>⏱ 長按 3 秒</b>放置／互動模式</div>
+        <div><b>👆👆 點兩下椅子</b>打開對話</div>
+        <div><b>↘ 右下角</b>臉／胸／腿／全身</div>
+        <div><b>🗣「Hey 拉比」</b>語音控制</div>
+        <div><b>📱 手機靠近臉</b>她會講悄悄話</div>
+      </div>
+      <p class="hnote">剛開始拉比會自己帶你試試看。隨時可以在 ⚙ 裡打開這份說明。</p>
+    </section>
+    <div class="hfoot">
+      <div class="hdots"><i></i><i></i><i></i></div>
+      <button class="ghost" id="hSkip">略過</button>
+      <button class="ghost" id="hNo" data-next>先不要</button><button class="primary" id="hNext" data-next>下一步</button><button class="primary" id="hAllow">允許</button><button class="primary" id="hStart">開始見拉比</button>
+    </div>
+  </div>
+</div>
 <script src="spine-webgl.min.js"></script>
 <script src="voice.js"></script>
 <script src="sfx.js"></script>
 <script src="interact.js"></script>
+<script src="help.js"></script>
 <script>
 (() => {
 const $ = id => document.getElementById(id);
@@ -326,7 +385,7 @@ $("autoMin").onclick = () => { const on = $("autoMin").getAttribute("aria-presse
 new ResizeObserver(updateSubPos).observe($("chat"));
 
 let toastT;
-function toast(t) { toastEl.textContent = t; toastEl.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove("on"), 900); }
+function toast(t, ms = 900) { toastEl.textContent = t; toastEl.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove("on"), ms); }
 
 // part reactions (lines/voice live in interact.js via LG.onPart / LG.onStroke)
 function partOf(slot, wy) {
@@ -397,7 +456,7 @@ function goShot(k) {
   document.querySelectorAll("#shots button").forEach(b => b.classList.toggle("on", b.dataset.shot === k));
   if (k === "full") resetCam(); else frameSlots(PARTS[k], k === "face" ? 1.9 : k === "chest" ? 1.25 : 1.1);
 }
-document.querySelectorAll("#shots button").forEach(b => b.onclick = () => { goShot(b.dataset.shot); LG.poke && LG.poke(); });
+document.querySelectorAll("#shots button").forEach(b => b.onclick = () => { goShot(b.dataset.shot); LG.poke && LG.poke(); LG.did && LG.did("shots"); });
 LG.goShot = goShot;
 
 // ---- hit test ----

@@ -82,6 +82,7 @@ const APP = {
 let extMusic = false;
 function setSession(t) { try { if (navigator.audioSession) navigator.audioSession.type = t; } catch (e) {} }
 function stopExtMusic() {
+  did("music");
   // a web page can't close Music, but taking the "playback" audio focus makes iOS pause it
   extMusic = false; setSession("playback");
   initAudio(); if (ac.state !== "running") ac.resume();
@@ -90,6 +91,7 @@ function stopExtMusic() {
 }
 LG.stopExtMusic = stopExtMusic;
 function openApp(kind, fromTap) {
+  if (kind === "music") did("music");
   if (kind === "music") { extMusic = true; setSession("ambient"); }
   say(pick(LINES[kind]), { force: true });
   // give her line a moment (voice command), or go right away (tap: iOS only allows the jump inside the tap)
@@ -138,6 +140,7 @@ function toggleMic() {
   else { try { rec && rec.abort(); } catch (e) {} rec = null; LG.toast && LG.toast("語音控制關閉"); }
 }
 LG.onHeard = onHeard; // for testing
+LG.toggleMic = toggleMic; LG.micOn = () => micOn;
 
 // ---------------- 拉比音效: sound sets (sfx.js). Called by keyword (chat / voice) or by state; "我想要" plays the default sequence ----------------
 // dark screen, headphone hint, Next / End.  A set with loop:true repeats until End.
@@ -223,6 +226,8 @@ function say(line, opts = {}) {
   speechSynthesis.speak(u);
 }
 let voiceOn = true;
+LG.say = (l, o) => say(l, o); LG.talking = () => talking(); LG.lastSayAt = () => lastSay;
+const did = k => { LG.did && LG.did(k); };
 
 // ---------------- audio: generated lo-fi + ambience ----------------
 let voiceG = null, sfxG = null;
@@ -317,6 +322,7 @@ async function holdScreen(on) {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") { if (awake) holdScreen(true); if (extMusic) setSession("ambient"); if (ac && ac.state !== "running") ac.resume(); }
 });
+LG.power = on => setPower(on); LG.isAwake = () => awake; LG.isSpecial = () => special;
 function setPower(on) {
   initAudio(); if (ac.state === "suspended") ac.resume();
   if (on === awake) return;
@@ -330,22 +336,23 @@ function setPower(on) {
     setTimeout(() => {
       document.body.classList.remove("booting"); document.body.classList.add("awake"); restTarget = 0; LG.shot && LG.shot("wake");
       playing = !extMusic; ramp(bgmBus.gain, 0, 0.01); applyBgm(4.5); ramp(ambBus.gain, 0, 2.5);
-      setMode(modeLabel()); setTimeout(() => say(pick(LINES[greetSlot()]), { force: true }), 1600);
+      setMode(modeLabel()); setTimeout(() => { const first = LG.firstMeet && LG.firstMeet(); say(first || pick(LINES[greetSlot()]), { force: true }); }, 1600);
       scheduleIdleTalk();
     }, 1400);
   } else {
-    say(pick(LINES.sleep), { force: true });
+    did("alone"); say(pick(LINES.sleep), { force: true });
     playing = false; applyBgm(2.2); ramp(ambBus.gain, 0.4, 3);
     document.body.classList.remove("awake", "talk"); restTarget = 1; LG.shot && LG.shot("sleep"); setMode("休眠待機"); clearTimeout(idleTalkT);
   }
 }
-function scheduleIdleTalk() { clearTimeout(idleTalkT); idleTalkT = setTimeout(() => { if (awake && mode !== "listen") say(pick(LINES.idle)); scheduleIdleTalk(); }, 35000 + Math.random() * 25000); }
+function scheduleIdleTalk() { clearTimeout(idleTalkT); idleTalkT = setTimeout(() => { if (awake && mode !== "listen" && !(LG.guideBusy && LG.guideBusy())) say(pick(LINES.idle)); scheduleIdleTalk(); }, 35000 + Math.random() * 25000); }
 (function restLoop() { LG.rest += (restTarget - LG.rest) * 0.03; requestAnimationFrame(restLoop); })();
 
 // taps on parts: only react while awake, and speak a line now and then
 // ---------------- touch reactions ----------------
 let chestHits = [], sulkUntil = 0, headLevel = 0, loveUntil = 0;
 function chestTouch() {
+  did("nude");
   const now = performance.now(); chestHits = chestHits.filter(t => now - t < 8000); chestHits.push(now);
   if (chestHits.length >= 3) { chestHits = []; sulkUntil = now + 8000; say(pick(LINES.angry), { force: true }); LG.fx.shake(); document.body.classList.add("angry"); setTimeout(() => document.body.classList.remove("angry"), 2500); }
   else say(pick(LINES.chest), { force: chestHits.length === 1 });
@@ -367,7 +374,7 @@ LG.onStroke = (part, rev) => {
   if (rev < 0) { headLevel = 0; return; }
   if (part.key === "head") {
     if (now < sulkUntil) { if (rev === 3) say("哼，現在才來討好我。", { force: true }); return; }
-    if (rev === 2 && headLevel < 1) { headLevel = 1; say(pick(LINES.headRub), { force: true }); }
+    if (rev === 2 && headLevel < 1) { headLevel = 1; did("head"); say(pick(LINES.headRub), { force: true }); }
     else if (rev === 6 && headLevel < 2) { headLevel = 2; say(pick(LINES.headGood), { force: true }); }
     else if (rev === 11 && headLevel < 3 && now > loveUntil) { headLevel = 3; loveUntil = now + 8000; say(pick(LINES.headLove), { force: true }); LG.fx.playActive(); burst("💗", 10); }
   } else if (part.key === "chest") { if (rev % 3 === 0) chestTouch(); }
@@ -390,6 +397,7 @@ LG.strokeFx = (part, rev, x, y) => {
 
 // ---------------- chat (canned replies; swap ask() for an AI endpoint later) ----------------
 function ask(q) {
+  if (/說明|教學|help|怎麼玩/i.test(q)) { LG.openHelp && LG.openHelp(); return; }
   const sfxIds = setsFor(q); if (sfxIds) { enterSpecial(sfxIds); return; }
   if (!awake) setPower(true);
   for (const [re, ans, fx] of REPLIES) if (re.test(q)) { setTimeout(() => say(pick(ans), { force: true }), 400); fx && fx(); return; }
@@ -412,14 +420,15 @@ function setModeState(m, opts = {}) {
   document.body.classList.toggle("placed", m === "listen");
   if (awake && !special) { if (m === "listen") { setNear(false); LG.resetCam && LG.resetCam(); } else if (!near) LG.shot && LG.shot("wake"); }
   // a mode only speaks when entered, at most once every 90s per mode
-  const sayOnce = (k, arr) => { if (now - (modeLineAt[k] || -1e9) > 90000) { modeLineAt[k] = now; setTimeout(() => mode === k && say(pick(arr)), 1500); } };
+  const sayOnce = (k, arr) => { if (now - (setPower.at || -1e9) > 7000 && now - (modeLineAt[k] || -1e9) > 90000) {  // the greeting goes first after waking
+    modeLineAt[k] = now; setTimeout(() => mode === k && say(pick(arr)), 1500); } };
   if (m === "listen") sayOnce("listen", LINES.listen);
   if (m === "talk") sayOnce("talk", LINES.face);
 }
 addEventListener("deviceorientation", e => { if (e.beta != null) ori = { b: e.beta, g: e.gamma }; });
 // near/far: face size in the front camera. near → camera pushes in and she whispers; far + phone still 5s → placement
 let faceSize = 0, near = false, nearSince = 0, stillSince = 0, lastOri = null, manualUntil = 0;
-let nearAt = 0;
+let nearAt = 0; LG.setNear = on => setNear(on);
 function setNear(on) {
   if (on === near) return;
   if (on && performance.now() - nearAt < 3000) return;   // no ping-pong between near and far
@@ -451,13 +460,14 @@ function evalMode() {
 LG.toggleMode = () => {
   if (special) return;
   if (!awake) { setPower(true); return; }
-  manualUntil = performance.now() + 12000; setNear(false);
+  did("mode"); manualUntil = performance.now() + 12000; setNear(false);
   setModeState(mode === "listen" ? "normal" : "listen", { force: true });
   LG.toast && LG.toast(mode === "listen" ? "放置模式" : "互動模式");
 };
 LG.mode = () => mode;
 evalMode();
 
+LG.toggleSense = () => toggleSense(); LG.sensing = () => sensing;
 async function toggleSense() {
   if (sensing) { sensing = false; $("sense").setAttribute("aria-pressed", false); camNote(""); if (video && video.srcObject) video.srcObject.getTracks().forEach(t => t.stop()); setModeState("normal"); return; }
   if (DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function") { try { await DeviceOrientationEvent.requestPermission(); } catch (e) {} }
