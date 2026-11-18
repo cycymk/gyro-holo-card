@@ -8,6 +8,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0d0b12">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<meta name="apple-mobile-web-app-title" content="Holo Maker">
 <title>Gyro Holo Maker</title>
 <style>
 :root{
@@ -36,6 +39,23 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 #start .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 #start.drag{outline:3px dashed var(--cyan);outline-offset:-14px}
 .fine{font-size:.76rem;color:var(--mute);opacity:.85}
+#start .logo{width:96px;height:96px;border-radius:22px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+#installLink{background:none;border:0;color:var(--cyan);text-decoration:underline;font-size:.82rem;padding:4px}
+/* add-to-home-screen sheet */
+#install{position:fixed;inset:0;z-index:40;display:flex;align-items:flex-end;justify-content:center;background:rgba(5,4,9,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+#install .sheet{width:min(440px,100%);background:#1b1626;border:1px solid var(--line);border-radius:20px 20px 0 0;
+  padding:20px 20px calc(env(safe-area-inset-bottom,0px) + 18px);display:flex;flex-direction:column;gap:14px;animation:up .3s ease-out}
+@keyframes up{from{transform:translateY(40px);opacity:0}}
+#install .hd{display:flex;gap:12px;align-items:center}
+#install .hd img{width:56px;height:56px;border-radius:13px}
+#install h2{margin:0;font-size:1.05rem}
+#install .hd p{margin:2px 0 0;font-size:.8rem;color:var(--mute)}
+#install ol{margin:0;padding-left:1.3em;line-height:1.9;font-size:.9rem}
+#install .k{display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:7px;padding:0 7px;font-size:.84rem}
+#install .k svg{width:15px;height:15px}
+#install .acts{display:flex;gap:10px;justify-content:flex-end}
+@media (min-width:700px){#install{align-items:center}#install .sheet{border-radius:20px}}
+@media (prefers-reduced-motion:reduce){#install .sheet{animation:none}}
 
 /* busy overlay */
 #busy{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(13,11,18,.86);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:30;padding:24px;text-align:center}
@@ -77,6 +97,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 <body>
 
 <section id="start">
+  <img class="logo" src="icon-192.png" alt="">
   <h1>Gyro <span>Holo</span> Maker</h1>
   <p>選一張圖片，瀏覽器會自動算出深度圖，做成滿版的立體閃卡。手機傾斜或手指滑動就會有視差和閃光。圖片不會上傳，全部在你的裝置上處理。</p>
   <div class="row">
@@ -84,6 +105,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
     <button class="big" id="sample">用範例圖試試</button>
   </div>
   <div class="fine">也可以把圖片拖進來，或直接貼上（Ctrl/⌘ + V）。第一次會下載約 35MB 的深度模型，之後會快取。</div>
+  <button id="installLink" hidden>📲 加到主畫面，用全螢幕開</button>
 </section>
 
 <section id="view" hidden>
@@ -130,6 +152,13 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
   <div id="busySub"></div>
 </div>
 <div id="toast"></div>
+<div id="install" hidden role="dialog" aria-modal="true" aria-labelledby="instTitle">
+  <div class="sheet">
+    <div class="hd"><img src="icon-192.png" alt=""><div><h2 id="instTitle">加到主畫面</h2><p>從主畫面打開會是全螢幕，沒有網址列，閃卡效果最好。</p></div></div>
+    <ol id="instSteps"></ol>
+    <div class="acts"><button id="instLater">下次再說</button><button class="primary" id="instGo">知道了</button></div>
+  </div>
+</div>
 <canvas id="depthPeek" hidden></canvas>
 
 <script src="holo.js"></script>
@@ -324,6 +353,45 @@ addEventListener("dragover", e => { e.preventDefault(); $("start").classList.add
 addEventListener("dragleave", () => $("start").classList.remove("drag"));
 addEventListener("drop", e => { e.preventDefault(); $("start").classList.remove("drag"); const f = [...e.dataTransfer.files].find(f => f.type.startsWith("image/")); if (f) processFile(f, f.name); });
 addEventListener("paste", e => { const it = [...(e.clipboardData || {}).items || []].find(i => i.type.startsWith("image/")); if (it) processFile(it.getAsFile(), "pasted"); });
+
+// ---------- add to home screen ----------
+const isStandalone = () => (matchMedia && matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches) || navigator.standalone === true;
+const ua = navigator.userAgent;
+const isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isMobile = isIOS || /Android|Mobi/i.test(ua);
+const store = { get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} } };
+let deferredInstall = null;
+const SHARE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+const PLUS_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg>';
+function showInstall() {
+  const ol = $("instSteps");
+  if (deferredInstall) {
+    ol.innerHTML = "<li>按下面的「安裝」，確認加到主畫面</li><li>之後從主畫面的 <b>Holo Maker</b> 圖示打開</li>";
+    $("instGo").textContent = "安裝";
+  } else if (isIOS) {
+    ol.innerHTML = `<li>點 Safari 的 <span class="k">${SHARE_SVG}分享</span>（iOS 26 在網址列旁的「⋯」裡）</li>`
+      + `<li>往下找 <span class="k">${PLUS_SVG}加入主畫面</span></li><li>點右上角「加入」，之後從主畫面的 <b>Holo Maker</b> 打開</li>`;
+    $("instGo").textContent = "知道了";
+  } else {
+    ol.innerHTML = "<li>點瀏覽器右上角的 <span class=\"k\">⋮</span> 選單</li><li>選「加到主畫面」或「安裝應用程式」</li><li>之後從主畫面的 <b>Holo Maker</b> 打開</li>";
+    $("instGo").textContent = "知道了";
+  }
+  $("install").hidden = false;
+}
+function hideInstall(remember) { $("install").hidden = true; if (remember) store.set("holo_install_seen", "1"); }
+$("instGo").onclick = async () => {
+  if (deferredInstall) { deferredInstall.prompt(); try { await deferredInstall.userChoice; } catch (_) {} deferredInstall = null; }
+  hideInstall(true);
+};
+$("instLater").onclick = () => hideInstall(true);
+$("install").addEventListener("click", e => { if (e.target.id === "install") hideInstall(true); });
+$("installLink").onclick = showInstall;
+addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredInstall = e; $("installLink").hidden = false; });
+addEventListener("appinstalled", () => { $("installLink").hidden = true; hideInstall(true); });
+if (!isStandalone() && (isMobile || deferredInstall)) {
+  $("installLink").hidden = false;
+  if (!store.get("holo_install_seen")) setTimeout(() => { if ($("start").hidden === false) showInstall(); }, 700);
+}
 
 // warm the model in the background while the user picks a file
 setTimeout(() => { try { getWorker().postMessage({ type: "warm" }); } catch (_) {} }, 600);
