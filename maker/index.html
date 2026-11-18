@@ -39,6 +39,12 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 #start .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 #start.drag{outline:3px dashed var(--cyan);outline-offset:-14px}
 .fine{font-size:.76rem;color:var(--mute);opacity:.85}
+.presets-wrap{display:flex;flex-direction:column;gap:8px;align-items:center;width:100%}
+.presets{display:flex;gap:10px;overflow-x:auto;max-width:100%;padding:4px 2px;touch-action:pan-x;scrollbar-width:none}
+.presets button{padding:0;border-radius:12px;overflow:hidden;flex:0 0 auto;width:86px;flex-direction:column;gap:0;background:#1b1626}
+.presets img{width:86px;height:128px;object-fit:cover;display:block}
+.presets span{font-size:.72rem;padding:5px 4px;color:var(--fg);width:100%;text-align:center}
+#start{overflow:auto}
 #start .logo{width:96px;height:96px;border-radius:22px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
 #installLink{background:none;border:0;color:var(--cyan);text-decoration:underline;font-size:.82rem;padding:4px}
 /* add-to-home-screen sheet */
@@ -102,8 +108,8 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
   <p>選一張圖片，瀏覽器會自動算出深度圖，做成滿版的立體閃卡。手機傾斜或手指滑動就會有視差和閃光。圖片不會上傳，全部在你的裝置上處理。</p>
   <div class="row">
     <label class="btn primary big">選擇圖片<input id="file" type="file" accept="image/*"></label>
-    <button class="big" id="sample">用範例圖試試</button>
   </div>
+  <div class="presets-wrap"><div class="fine">或直接點預設圖片（已經算好深度，立刻能看）</div><div class="presets" id="presets"></div></div>
   <div class="fine">也可以把圖片拖進來，或直接貼上（Ctrl/⌘ + V）。第一次會下載約 35MB 的深度模型，之後會快取。</div>
   <button id="installLink" hidden>📲 加到主畫面，用全螢幕開</button>
 </section>
@@ -113,7 +119,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 </section>
 
 <div id="bar" data-ui hidden>
-  <label class="btn" title="換一張圖片">🖼<span class="t"> 換圖</span><input id="file2" type="file" accept="image/*"></label>
+  <button id="home" title="換一張圖片或選預設圖">🖼<span class="t"> 換圖</span></button>
   <button id="gyroBtn">📱<span class="t"> 陀螺儀</span></button>
   <button id="recal" title="把目前手機角度設成正面">◎<span class="t"> 歸零</span></button>
   <span class="sp"></span>
@@ -347,8 +353,28 @@ $("peekBtn").onclick = () => { peek = !peek; $("peekBtn").textContent = peek ? "
 
 // ---------- files in ----------
 const pick = e => { const f = e.target.files[0]; e.target.value = ""; if (f) processFile(f, f.name); setPanel(false); };
-$("file").onchange = pick; $("file2").onchange = pick;
-$("sample").onclick = () => processFile("sample.jpg", "sample");
+$("file").onchange = pick;
+$("home").onclick = () => { setPanel(false); ["view", "bar", "prompt", "depthPeek"].forEach(id => $(id).hidden = true); $("start").hidden = false; };
+// ---------- preset images (depth precomputed, no model needed) ----------
+const PRESETS = [
+  { id: "autumn-desk", name: "秋日書桌", focus: 0.46 },
+  { id: "holo-girl", name: "霓虹少女", focus: 0.36 },
+];
+PRESETS.forEach(pr => {
+  const b = document.createElement("button");
+  b.innerHTML = `<img src="presets/${pr.id}-thumb.jpg" alt="" loading="lazy"><span>${pr.name}</span>`;
+  b.onclick = () => openPreset(pr);
+  $("presets").appendChild(b);
+});
+async function openPreset(pr) {
+  try {
+    busy("讀取圖片…");
+    const [img, dep] = await Promise.all([loadImage(`presets/${pr.id}.jpg`), loadImage(`presets/${pr.id}-depth.png`)]);
+    const dc = document.createElement("canvas"); dc.width = dep.naturalWidth; dc.height = dep.naturalHeight; dc.getContext("2d").drawImage(dep, 0, 0);
+    current = { img: flatten(img), depth: dc, name: pr.id };
+    showViewer(pr.focus); unbusy();
+  } catch (err) { unbusy(); alertBox("失敗：" + err.message); }
+}
 addEventListener("dragover", e => { e.preventDefault(); $("start").classList.add("drag"); });
 addEventListener("dragleave", () => $("start").classList.remove("drag"));
 addEventListener("drop", e => { e.preventDefault(); $("start").classList.remove("drag"); const f = [...e.dataTransfer.files].find(f => f.type.startsWith("image/")); if (f) processFile(f, f.name); });

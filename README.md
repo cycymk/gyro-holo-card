@@ -8,6 +8,7 @@
 線上：https://cycymk.github.io/gyro-holo-card/maker/
 
 載入任何圖片，瀏覽器內用 Depth Anything V2（small，int8 量化 35MB，ONNX Runtime Web）自動算深度圖，直接變成滿版的陀螺儀立體閃卡。圖片不會上傳。
+- 開始畫面有預設圖片（秋日書桌、霓虹少女），深度圖已預先算好，點了立刻能看。新增預設圖：放 `maker/presets/<id>.jpg`、`<id>-depth.png`、`<id>-thumb.jpg`，再加進 index.html 的 PRESETS。
 - 傾斜手機或手指拖曳看視差；iPhone 要點「啟用陀螺儀」授權。
 - ⚙ 調整立體強度、焦點深度、閃光強度與樣式（彩虹／只亮主體／閃粉／關）、顯示方式（滿版／完整圖／卡片）。
 - 可匯出單一 HTML（圖和深度圖內嵌），放到任何 HTTPS 網址就能分享；也可下載深度圖 PNG。
