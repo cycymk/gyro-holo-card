@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d0b12">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Gyro Holo Maker</title>
+<style>
+:root{
+  --bg:#0d0b12; --panel:rgba(22,18,32,.82); --line:rgba(255,255,255,.14); --fg:#f6f1fc; --mute:#b3a7c8;
+  --accent:#ff4fa3; --cyan:#3fe0f0;
+  --font:system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:var(--font);overflow:hidden;overscroll-behavior:none}
+body{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+button,label.btn{font:inherit;font-size:.86rem;color:var(--fg);background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:999px;padding:8px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+button:focus-visible,label.btn:focus-within{outline:2px solid var(--cyan);outline-offset:2px}
+button.primary,label.primary{background:var(--cyan);border-color:var(--cyan);color:#05232b;font-weight:700}
+button.pink{background:var(--accent);border-color:var(--accent);color:#22040f;font-weight:700}
+input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+
+/* start screen */
+#start{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;text-align:center;
+  background:radial-gradient(120% 80% at 50% 0%,#2a1840 0%,var(--bg) 60%)}
+#start h1{margin:0;font-size:clamp(1.6rem,6vw,2.4rem);letter-spacing:.02em;font-weight:800}
+#start h1 span{background:linear-gradient(90deg,var(--accent),#ffd36b,var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent}
+#start p{margin:0;color:var(--mute);max-width:30em;line-height:1.6;font-size:.92rem}
+#start .big{font-size:1.05rem;padding:14px 26px}
+#start .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+#start.drag{outline:3px dashed var(--cyan);outline-offset:-14px}
+.fine{font-size:.76rem;color:var(--mute);opacity:.85}
+
+/* busy overlay */
+#busy{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(13,11,18,.86);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:30;padding:24px;text-align:center}
+#busy .bar{width:min(280px,70vw);height:6px;border-radius:6px;background:rgba(255,255,255,.12);overflow:hidden}
+#busy .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--cyan));transition:width .15s}
+#busy .bar.indet i{width:35%;animation:indet 1.1s ease-in-out infinite}
+@keyframes indet{0%{transform:translateX(-100%)}100%{transform:translateX(290%)}}
+#busyText{font-size:.95rem}
+#busySub{font-size:.78rem;color:var(--mute)}
+
+/* viewer */
+#view{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;perspective:1000px;background:var(--bg)}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+#view.card #gl{position:relative;inset:auto;border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.1);will-change:transform}
+#bar{position:fixed;left:0;right:0;top:0;z-index:20;display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  padding:calc(env(safe-area-inset-top,0px) + 10px) max(12px,env(safe-area-inset-right,0px)) 10px max(12px,env(safe-area-inset-left,0px));
+  background:linear-gradient(rgba(0,0,0,.55),rgba(0,0,0,0));transition:opacity .35s, transform .35s}
+#bar button,#bar label.btn{background:var(--panel);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);padding:7px 12px;font-size:.82rem}
+#bar .sp{flex:1}
+#bar{flex-wrap:nowrap}
+@media (max-width:360px){#bar .t{display:none}}
+.ui-hidden #bar{opacity:0;transform:translateY(-8px);pointer-events:none}
+#panel{position:fixed;z-index:21;top:calc(env(safe-area-inset-top,0px) + 58px);right:max(12px,env(safe-area-inset-right,0px));width:min(340px,calc(100vw - 24px));
+  background:var(--panel);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:12px;max-height:calc(100dvh - 80px);overflow:auto;touch-action:pan-y}
+#panel .lab{font-size:.75rem;color:var(--mute);margin-bottom:6px;display:flex;justify-content:space-between}
+#panel input[type=range]{width:100%;accent-color:var(--accent)}
+.seg{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.seg button{flex:1;border:0;border-radius:0;background:transparent;padding:7px 6px;justify-content:center;font-size:.8rem}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#22040f;font-weight:700}
+#panel .row{display:flex;gap:8px;flex-wrap:wrap}
+#prompt{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 90px);transform:translateX(-50%);z-index:22;display:flex;flex-direction:column;align-items:center;gap:8px}
+#prompt button{font-size:1rem;padding:12px 22px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 64px);transform:translateX(-50%);z-index:25;background:var(--panel);border:1px solid var(--line);
+  padding:7px 14px;border-radius:999px;font-size:.82rem;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap}
+#toast.on{opacity:1}
+#depthPeek{position:fixed;z-index:19;right:max(12px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 12px);width:min(30vw,160px);border-radius:10px;border:1px solid var(--line);pointer-events:none}
+</style>
+</head>
+<body>
+
+<section id="start">
+  <h1>Gyro <span>Holo</span> Maker</h1>
+  <p>選一張圖片，瀏覽器會自動算出深度圖，做成滿版的立體閃卡。手機傾斜或手指滑動就會有視差和閃光。圖片不會上傳，全部在你的裝置上處理。</p>
+  <div class="row">
+    <label class="btn primary big">選擇圖片<input id="file" type="file" accept="image/*"></label>
+    <button class="big" id="sample">用範例圖試試</button>
+  </div>
+  <div class="fine">也可以把圖片拖進來，或直接貼上（Ctrl/⌘ + V）。第一次會下載約 35MB 的深度模型，之後會快取。</div>
+</section>
+
+<section id="view" hidden>
+  <canvas id="gl"></canvas>
+</section>
+
+<div id="bar" data-ui hidden>
+  <label class="btn" title="換一張圖片">🖼<span class="t"> 換圖</span><input id="file2" type="file" accept="image/*"></label>
+  <button id="gyroBtn">📱<span class="t"> 陀螺儀</span></button>
+  <button id="recal" title="把目前手機角度設成正面">◎<span class="t"> 歸零</span></button>
+  <span class="sp"></span>
+  <button id="fsBtn" hidden title="全螢幕">⛶</button>
+  <button id="setBtn" aria-expanded="false">⚙ 調整</button>
+</div>
+
+<div id="panel" data-ui hidden>
+  <div><div class="lab"><span>立體強度</span><span id="vStr"></span></div><input id="str" type="range" min="0" max="2.5" step="0.05" value="1"></div>
+  <div><div class="lab"><span>焦點深度（哪一層不動）</span><span id="vFocus"></span></div><input id="focus" type="range" min="0" max="1" step="0.01" value="0.5"></div>
+  <div><div class="lab"><span>閃光</span><span id="vFoil"></span></div><input id="foil" type="range" min="0" max="1" step="0.05" value="0.5"></div>
+  <div><div class="lab"><span>閃光樣式</span></div>
+    <div class="seg" id="style">
+      <button data-v="rainbow" aria-pressed="true">彩虹</button><button data-v="subject" aria-pressed="false">只亮主體</button><button data-v="glitter" aria-pressed="false">閃粉</button><button data-v="off" aria-pressed="false">關</button>
+    </div></div>
+  <div><div class="lab"><span>顯示方式</span></div>
+    <div class="seg" id="fit">
+      <button data-v="cover" aria-pressed="true">滿版</button><button data-v="contain" aria-pressed="false">完整圖</button><button data-v="card" aria-pressed="false">卡片</button>
+    </div></div>
+  <div class="row">
+    <button id="peekBtn">看深度圖</button>
+    <button id="exportBtn" class="pink">⤓ 匯出單檔 HTML</button>
+    <button id="depthDl">⤓ 深度圖 PNG</button>
+  </div>
+  <div class="fine">匯出的 HTML 只有一個檔案（圖和深度圖都包在裡面），放到任何 HTTPS 網址就能用陀螺儀。</div>
+</div>
+
+<div id="prompt" data-ui hidden>
+  <button class="primary" id="gyroBig">點一下啟用陀螺儀</button>
+  <span class="fine">也可以直接用手指在畫面上拖曳</span>
+</div>
+
+<div id="busy" hidden>
+  <div id="busyText">處理中…</div>
+  <div class="bar" id="busyBar"><i></i></div>
+  <div id="busySub"></div>
+</div>
+<div id="toast"></div>
+<canvas id="depthPeek" hidden></canvas>
+
+<script src="holo.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const SIZE = 518, MEAN = [0.485, 0.456, 0.406], STD = [0.229, 0.224, 0.225];
+const MAX_TEX = 2048;
+
+// ---------- busy UI ----------
+function busy(text, sub, frac) {
+  $("busy").hidden = false; $("busyText").textContent = text; $("busySub").textContent = sub || "";
+  const bar = $("busyBar"); bar.classList.toggle("indet", frac == null);
+  bar.querySelector("i").style.width = frac == null ? "" : Math.round(frac * 100) + "%";
+}
+function unbusy() { $("busy").hidden = true; }
+let toastT = 0;
+function toast(msg, ms) { const t = $("toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), ms || 2200); }
+
+// ---------- depth worker ----------
+let worker = null, pending = null;
+function getWorker() {
+  if (worker) return worker;
+  worker = new Worker("depth-worker.js");
+  worker.onmessage = e => {
+    const m = e.data;
+    if (m.type === "progress") {
+      if (m.stage === "download") busy("下載深度模型（只有第一次）", `${(m.loaded / 1048576).toFixed(1)} / ${(m.total / 1048576).toFixed(1)} MB`, m.loaded / m.total);
+      else if (m.stage === "cache") busy("載入深度模型", "使用快取");
+      else if (m.stage === "init") busy("初始化模型", "");
+      else if (m.stage === "infer") busy("計算深度圖", "手機上大約 3 到 15 秒");
+    } else if (m.type === "result") { pending && pending.res(m); pending = null; }
+    else if (m.type === "error") { pending && pending.rej(new Error(m.message)); pending = null; }
+  };
+  worker.onerror = e => { pending && pending.rej(new Error(e.message || "worker error")); pending = null; };
+  return worker;
+}
+function runDepth(input) {
+  return new Promise((res, rej) => { pending = { res, rej }; getWorker().postMessage({ type: "run", input }, [input.buffer]); });
+}
+
+// ---------- image -> depth ----------
+function loadImage(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("讀不到這張圖片")); i.src = src; }); }
+
+function flatten(img) {          // limit size, drop alpha onto dark bg
+  const w0 = img.naturalWidth, h0 = img.naturalHeight, sc = Math.min(1, MAX_TEX / Math.max(w0, h0));
+  const c = document.createElement("canvas"); c.width = Math.round(w0 * sc); c.height = Math.round(h0 * sc);
+  const x = c.getContext("2d"); x.fillStyle = "#16121e"; x.fillRect(0, 0, c.width, c.height);
+  x.imageSmoothingQuality = "high"; x.drawImage(img, 0, 0, c.width, c.height); return c;
+}
+
+function toTensor(src) {
+  const c = document.createElement("canvas"); c.width = c.height = SIZE;
+  const x = c.getContext("2d", { willReadFrequently: true }); x.imageSmoothingQuality = "high"; x.drawImage(src, 0, 0, SIZE, SIZE);
+  const d = x.getImageData(0, 0, SIZE, SIZE).data, n = SIZE * SIZE, out = new Float32Array(3 * n);
+  for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) out[k * n + i] = (d[i * 4 + k] / 255 - MEAN[k]) / STD[k];
+  return out;
+}
+
+function blur(a, w, h, r) {        // separable box blur, in place
+  const t = new Float32Array(a.length);
+  for (let y = 0; y < h; y++) { let s = 0; const o = y * w;
+    for (let x = -r; x <= r; x++) s += a[o + Math.min(w - 1, Math.max(0, x))];
+    for (let x = 0; x < w; x++) { t[o + x] = s / (2 * r + 1); s += a[o + Math.min(w - 1, x + r + 1)] - a[o + Math.max(0, x - r)]; } }
+  for (let x = 0; x < w; x++) { let s = 0;
+    for (let y = -r; y <= r; y++) s += t[Math.min(h - 1, Math.max(0, y)) * w + x];
+    for (let y = 0; y < h; y++) { a[y * w + x] = s / (2 * r + 1); s += t[Math.min(h - 1, y + r + 1) * w + x] - t[Math.max(0, y - r) * w + x]; } }
+}
+
+function depthCanvas(raw) {
+  const n = raw.length, sorted = Float32Array.from(raw).sort();
+  const lo = sorted[Math.floor(n * 0.01)], hi = sorted[Math.floor(n * 0.995)], span = Math.max(1e-6, hi - lo);
+  const a = new Float32Array(n); let sum = 0;
+  for (let i = 0; i < n; i++) { const v = Math.min(1, Math.max(0, (raw[i] - lo) / span)); a[i] = v; sum += v; }
+  blur(a, SIZE, SIZE, 2); blur(a, SIZE, SIZE, 1);
+  const c = document.createElement("canvas"); c.width = c.height = SIZE;
+  const x = c.getContext("2d"), im = x.createImageData(SIZE, SIZE);
+  for (let i = 0; i < n; i++) { const v = Math.round(a[i] * 255); im.data[i * 4] = im.data[i * 4 + 1] = im.data[i * 4 + 2] = v; im.data[i * 4 + 3] = 255; }
+  x.putImageData(im, 0, 0);
+  return { canvas: c, mean: sum / n };
+}
+
+// ---------- viewer ----------
+let holo = null, current = null;   // current = {img: canvas, depth: canvas, name}
+function ensureHolo() {
+  if (holo) return holo;
+  holo = Holo($("gl"), {
+    dragTarget: $("view"),
+    onTap: () => toggleUI(),
+    onGyro: () => { $("prompt").hidden = true; $("gyroBtn").querySelector(".t").textContent = " 陀螺儀 ✓"; toast("陀螺儀已啟用"); },
+    onFrame: t => { if (holo.params.card) $("gl").style.transform = `rotateX(${(-t.y * 9).toFixed(2)}deg) rotateY(${(t.x * 12).toFixed(2)}deg)`; },
+  });
+  return holo;
+}
+
+async function processFile(blobOrUrl, name) {
+  try {
+    busy("讀取圖片…");
+    const url = typeof blobOrUrl === "string" ? blobOrUrl : URL.createObjectURL(blobOrUrl);
+    const img = await loadImage(url);
+    const flat = flatten(img);
+    busy("準備深度模型…");
+    const t0 = performance.now();
+    const res = await runDepth(toTensor(flat));
+    const { canvas: dc, mean } = depthCanvas(res.depth);
+    current = { img: flat, depth: dc, name: (name || "holo").replace(/\.[^.]+$/, "") };
+    showViewer(mean);
+    unbusy();
+    toast(`深度圖完成（${((performance.now() - t0) / 1000).toFixed(1)} 秒）`);
+  } catch (err) {
+    unbusy(); console.error(err);
+    alertBox("失敗：" + err.message);
+  }
+}
+function alertBox(msg) { toast(msg, 5000); }
+
+function showViewer(mean) {
+  $("start").hidden = true; $("view").hidden = false; $("bar").hidden = false;
+  const h = ensureHolo();
+  h.setImage(current.img, current.depth);
+  const f = Math.round(Math.min(0.8, Math.max(0.2, mean)) * 100) / 100;
+  $("focus").value = f; h.set("focus", f); syncLabels();
+  layoutCard();
+  if (!h.gyroOn) {             // Android etc. just start sending; iOS needs a tap
+    h.listen();
+    setTimeout(() => { if (!h.gyroOn && h.needsPermission()) $("prompt").hidden = false; }, 700);
+  }
+  pokeUI();
+  drawPeek();
+}
+
+// card mode sizing
+function layoutCard() {
+  const g = $("gl"), card = holo && holo.params.card;
+  $("view").classList.toggle("card", !!card);
+  if (!card) { g.style.width = g.style.height = g.style.transform = ""; return; }
+  const W = innerWidth * 0.86, H = innerHeight * 0.78, ar = holo.aspect;
+  let w = W, h = W / ar; if (h > H) { h = H; w = H * ar; }
+  g.style.width = w + "px"; g.style.height = h + "px";
+}
+addEventListener("resize", layoutCard);
+
+// ---------- UI behaviour ----------
+let uiTimer = 0;
+function pokeUI() { document.body.classList.remove("ui-hidden"); clearTimeout(uiTimer); uiTimer = setTimeout(() => { if ($("panel").hidden) document.body.classList.add("ui-hidden"); }, 3500); }
+function toggleUI() {
+  if (!$("panel").hidden) { setPanel(false); return; }
+  if (document.body.classList.contains("ui-hidden")) pokeUI(); else { document.body.classList.add("ui-hidden"); clearTimeout(uiTimer); }
+}
+function setPanel(open) { $("panel").hidden = !open; $("setBtn").setAttribute("aria-expanded", open); if (!open) pokeUI(); else { clearTimeout(uiTimer); document.body.classList.remove("ui-hidden"); } }
+$("setBtn").onclick = () => setPanel($("panel").hidden);
+document.querySelectorAll("[data-ui]").forEach(el => el.addEventListener("pointerdown", e => { e.stopPropagation(); if (el.id !== "panel") pokeUI(); }));
+
+function syncLabels() {
+  $("vStr").textContent = (+$("str").value).toFixed(2); $("vFoil").textContent = (+$("foil").value).toFixed(2); $("vFocus").textContent = (+$("focus").value).toFixed(2);
+}
+["str", "foil", "focus"].forEach(id => $(id).addEventListener("input", () => {
+  const k = { str: "strength", foil: "foil", focus: "focus" }[id]; holo && holo.set(k, +$(id).value); syncLabels();
+}));
+function seg(id, fn) {
+  $(id).addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+    $(id).querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); fn(b.dataset.v); });
+}
+seg("style", v => holo.set("style", v));
+seg("fit", v => { holo.set("card", v === "card"); holo.set("fit", v === "card" ? "cover" : v); layoutCard(); });
+
+async function gyro() {
+  const h = ensureHolo();
+  try { const ok = await h.enableGyro(); if (!ok) toast("讀不到陀螺儀，請用手指拖曳。需要 HTTPS 和手機瀏覽器", 4000); }
+  catch (e) { toast("沒有允許動作感測。可重新整理再試，或用拖曳", 4000); }
+}
+$("gyroBtn").onclick = gyro; $("gyroBig").onclick = gyro;
+$("recal").onclick = () => { holo && holo.recenter(); toast("已把目前角度設為正面"); };
+
+const fsEl = document.documentElement;
+if (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen) $("fsBtn").hidden = false;
+$("fsBtn").onclick = () => {
+  const d = document;
+  if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+  else (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen).call(fsEl);
+};
+
+let peek = false;
+function drawPeek() { const c = $("depthPeek"); if (!current) return; c.width = 160; c.height = Math.round(160 / holo.aspect); c.getContext("2d").drawImage(current.depth, 0, 0, c.width, c.height); c.hidden = !peek; }
+$("peekBtn").onclick = () => { peek = !peek; $("peekBtn").textContent = peek ? "隱藏深度圖" : "看深度圖"; drawPeek(); };
+
+// ---------- files in ----------
+const pick = e => { const f = e.target.files[0]; e.target.value = ""; if (f) processFile(f, f.name); setPanel(false); };
+$("file").onchange = pick; $("file2").onchange = pick;
+$("sample").onclick = () => processFile("sample.jpg", "sample");
+addEventListener("dragover", e => { e.preventDefault(); $("start").classList.add("drag"); });
+addEventListener("dragleave", () => $("start").classList.remove("drag"));
+addEventListener("drop", e => { e.preventDefault(); $("start").classList.remove("drag"); const f = [...e.dataTransfer.files].find(f => f.type.startsWith("image/")); if (f) processFile(f, f.name); });
+addEventListener("paste", e => { const it = [...(e.clipboardData || {}).items || []].find(i => i.type.startsWith("image/")); if (it) processFile(it.getAsFile(), "pasted"); });
+
+// warm the model in the background while the user picks a file
+setTimeout(() => { try { getWorker().postMessage({ type: "warm" }); } catch (_) {} }, 600);
+// keep the busy overlay quiet during background warm-up
+const _busy = busy; let userWaiting = false;
+busy = function () { if (userWaiting || arguments[0] === "讀取圖片…") { userWaiting = true; _busy.apply(null, arguments); } };
+const _unbusy = unbusy; unbusy = function () { userWaiting = false; _unbusy(); };
+
+// ---------- export ----------
+function download(name, blob) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000); }
+$("depthDl").onclick = () => current.depth.toBlob(b => download(current.name + "-depth.png", b), "image/png");
+$("exportBtn").onclick = async () => {
+  if (!current) return;
+  try {
+    const engine = await (await fetch("holo.js")).text();
+    const imgURL = current.img.toDataURL("image/jpeg", 0.9), depURL = current.depth.toDataURL("image/png");
+    const p = holo.params;
+    const params = { strength: p.strength, foil: p.foil, focus: p.focus, style: p.style, fit: p.fit, card: false };
+    const html = exportTemplate(current.name, engine, imgURL, depURL, params);
+    download(current.name + "-holo.html", new Blob([html], { type: "text/html" }));
+    toast("已匯出 " + current.name + "-holo.html");
+  } catch (e) { toast("匯出失敗：" + e.message, 4000); }
+};
+function exportTemplate(title, engine, img, dep, params) {
+  const esc = s => s.replace(/[<&>"]/g, c => ({ "<": "&lt;", "&": "&amp;", ">": "&gt;", '"': "&quot;" }[c]));
+  return `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="theme-color" content="#0d0b12">
+<title>${esc(title)} · Holo</title>
+<style>html,body{margin:0;height:100%;background:#0d0b12;overflow:hidden;overscroll-behavior:none}body{touch-action:none;-webkit-user-select:none;user-select:none;font-family:system-ui,-apple-system,"PingFang TC",sans-serif}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block}
+#g{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 40px);transform:translateX(-50%);font:inherit;font-size:1rem;padding:12px 22px;border-radius:999px;border:0;background:#3fe0f0;color:#05232b;font-weight:700;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+[hidden]{display:none!important}</style></head><body>
+<canvas id="gl"></canvas><button id="g" hidden>點一下啟用陀螺儀</button>
+<script>${engine.replace(/<\/script/gi, "<\\/script")}<\/script>
+<script>
+(function(){var P=${JSON.stringify(params)};
+var h=Holo(document.getElementById("gl"),{params:P,dragTarget:document.body,onGyro:function(){g.hidden=true;}});
+var g=document.getElementById("g");
+function ld(s){return new Promise(function(r){var i=new Image();i.onload=function(){r(i)};i.src=s;});}
+Promise.all([ld("${img}"),ld("${dep}")]).then(function(a){h.setImage(a[0],a[1]);});
+h.listen();setTimeout(function(){if(!h.gyroOn&&h.needsPermission()){g.hidden=false;g.onclick=function(){h.enableGyro().catch(function(){});};}},700);
+var lastTap=0;document.body.addEventListener("pointerup",function(){var n=Date.now();if(n-lastTap<300)h.recenter();lastTap=n;});
+})();
+<\/script></body></html>`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "Gyro Holo Maker",
+  "short_name": "Holo Maker",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0d0b12",
+  "theme_color": "#0d0b12"
+}
